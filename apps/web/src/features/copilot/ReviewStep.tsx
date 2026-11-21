@@ -37,7 +37,7 @@ export function ReviewStep({
       </div>
       <div className="flex gap-2">
         <Button variant="outline" onClick={onBack} disabled={pending}>Back</Button>
-        <Button disabled={!valid || !reviewed || pending} onClick={onApprove}>Approve plan</Button>
+        <Button disabled={!valid || !reviewed || pending} onClick={onApprove}>{pending ? 'Approving…' : 'Approve plan'}</Button>
       </div>
     </div>
   )

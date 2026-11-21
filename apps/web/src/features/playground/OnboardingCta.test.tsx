@@ -67,13 +67,23 @@ describe('OnboardingCta', () => {
     expect(screen.getByRole('button', { name: copy })).toBeInTheDocument()
   })
 
-  it('marks CTA seen only when the exposure component mounts', () => {
+  it('marks CTA seen only when the visitor is in the experiment', () => {
+    m.useExperiment.mockReturnValue({ variant: 'control', experiment: { id: 1, name: 'x', inExperiment: true } })
     m.useFlagsmithLoading.mockReturnValue(LOADING)
     const { rerender } = setup()
     expect(localStorage.getItem('flagpilot.ctaSeenFor')).toBeNull()
     m.useFlagsmithLoading.mockReturnValue(LOADED)
     rerender(tree(true))
     expect(localStorage.getItem('flagpilot.ctaSeenFor')).toBe(getVisitorId().id)
+  })
+
+  it.each([
+    ['no experiment data', { variant: 'control' }],
+    ['not in experiment', { variant: 'control', experiment: { id: 1, name: 'x', inExperiment: false } }],
+  ])('does not mark CTA seen with %s', (_n, flag) => {
+    m.useExperiment.mockReturnValue(flag)
+    setup()
+    expect(localStorage.getItem('flagpilot.ctaSeenFor')).toBeNull()
   })
 
   it('after timeout shows control copy and never mounts exposure, even if flags arrive later', () => {

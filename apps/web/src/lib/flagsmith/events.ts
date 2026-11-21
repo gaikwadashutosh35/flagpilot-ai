@@ -9,9 +9,6 @@ export type CompleteResult =
 const SEEN_KEY = 'flagpilot.ctaSeenFor'
 const COMPLETED_KEY = 'flagpilot.completedFor'
 
-let lastFlushError: string | null = null
-export const getLastFlushError = () => lastFlushError
-
 export function markCtaSeen(visitorId: string): void {
   writeStore(SEEN_KEY, visitorId)
 }
@@ -26,11 +23,7 @@ export async function completeDemo(visitorId: string, available: boolean): Promi
   if (readStore(COMPLETED_KEY).value === visitorId) return { sent: false, reason: 'already_counted' }
   flagsmith.trackEvent(EVENTS.demoCompleted)
   writeStore(COMPLETED_KEY, visitorId)
-  try {
-    await flagsmith.flushEvents()
-    lastFlushError = null
-  } catch (e) {
-    lastFlushError = e instanceof Error ? e.message : String(e)
-  }
+  // Fire-and-forget: the SDK flush never rejects and may retry for several seconds.
+  void flagsmith.flushEvents().catch(() => {})
   return { sent: true }
 }

@@ -77,10 +77,30 @@ describe('ExperimentStatusPage', () => {
     expect(screen.getAllByText(/flagpilot_onboarding_cta/).length).toBeGreaterThan(0)
   })
 
+  it.each([
+    ['loaded', { isLoading: false, isFetching: false, error: null }, /Flagsmith:\s*loaded/],
+    ['loading', { isLoading: true, isFetching: true, error: null }, /Flagsmith:\s*loading/],
+    ['error without raw text', { isLoading: false, isFetching: false, error: new Error('secret detail') }, /Flagsmith:\s*SDK error/],
+  ])('shows honest Flagsmith state: %s', (_n, state, re) => {
+    m.useFlagsmithLoading.mockReturnValue(state)
+    renderPage()
+    expect(screen.getByText(re)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('secret detail')
+    expect(document.body.textContent).not.toMatch(/Events enabled|flush error/i)
+  })
+
+  it('renders four approval blocks, the target and the shell note', () => {
+    renderPage()
+    expect(screen.getByText('Target: project FlagPilot / environment Development')).toBeInTheDocument()
+    expect(screen.getByText('bash / Git Bash only')).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: /^Step \d — approval #\d, run separately/ })).toHaveLength(4)
+    expect(document.querySelectorAll('pre')).toHaveLength(4)
+  })
+
   it('without a key shows not configured and calls no SDK hooks', () => {
     m.env.hasFlagsmithKey = false
     renderPage(false)
-    expect(screen.getByText(/Flagsmith not configured/)).toBeInTheDocument()
+    expect(screen.getByText(/Flagsmith:\s*not configured/)).toBeInTheDocument()
     expect(m.useFlags).not.toHaveBeenCalled()
     expect(m.useFlagsmithLoading).not.toHaveBeenCalled()
   })

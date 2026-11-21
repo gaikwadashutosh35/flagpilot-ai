@@ -96,6 +96,8 @@ export function validatePlan(plan: ExperimentPlan): string[] {
   const keys = plan.variants.map((v) => v.key)
   if (new Set(keys).size !== keys.length) errors.push('Variant keys must be distinct.')
   if (keys[0] !== 'control') errors.push('The first variant must have the key "control".')
+  if (!NAME_RE.test(plan.variants[1].key))
+    errors.push('Treatment variant key must start with a lowercase letter and use only lowercase letters, digits and underscores (3-50 characters).')
   if (plan.variants.some((v) => !v.label.trim())) errors.push('Every variant needs a label.')
   if (!NAME_RE.test(plan.primaryMetric.event))
     errors.push('Primary metric event name must start with a lowercase letter and use only lowercase letters, digits and underscores (3-50 characters).')

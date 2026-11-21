@@ -38,12 +38,12 @@ describe('events', () => {
     expect(await completeDemo('fp_1', true)).toEqual({ sent: false, reason: 'already_counted' })
   })
 
-  it('a rejected flush still counts as sent and does not throw', async () => {
-    const { flagsmith, completeDemo, markCtaSeen, getLastFlushError } = await load()
-    vi.mocked(flagsmith.flushEvents).mockRejectedValueOnce(new Error('network down'))
+  it('resolves { sent: true } without waiting for a never-resolving flush', async () => {
+    const { flagsmith, completeDemo, markCtaSeen } = await load()
+    vi.mocked(flagsmith.flushEvents).mockReturnValueOnce(new Promise(() => {}))
     markCtaSeen('fp_1')
     expect(await completeDemo('fp_1', true)).toEqual({ sent: true })
-    expect(getLastFlushError()).toBe('network down')
+    expect(flagsmith.flushEvents).toHaveBeenCalledOnce()
     expect(await completeDemo('fp_1', true)).toEqual({ sent: false, reason: 'already_counted' })
   })
 

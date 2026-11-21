@@ -58,4 +58,10 @@ describe('validatePlan', () => {
     expect(errors).toHaveLength(5)
     expect(new Set(errors).size).toBe(5)
   })
+
+  it('rejects an invalid treatment variant key', () => {
+    const p = generatePlan({ question: 'Do testimonials help?' })
+    const bad = { ...p, variants: [p.variants[0], { ...p.variants[1], key: 'x; rm -rf' }] } as typeof p
+    expect(validatePlan(bad)).toEqual([expect.stringMatching(/treatment variant key/i)])
+  })
 })

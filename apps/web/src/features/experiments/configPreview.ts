@@ -1,13 +1,18 @@
 import { EVENTS } from '@/lib/flagsmith/constants'
-import type { ExperimentPlan } from '../copilot/plan'
+import { validatePlan, type ExperimentPlan } from '../copilot/plan'
 
-// Quoted heredoc: the shell interprets nothing in the body. JSON.stringify is single-line, so a bare JSON line cannot occur.
+// Single-line JSON with every non-ASCII code unit escaped (JSON-equivalent): no U+2028/2029, bidi or zero-width characters survive.
+const json = (body: unknown) =>
+  JSON.stringify(body).replace(/[^ -~]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+
+// Quoted heredoc: the shell interprets nothing in the body. The JSON is single-line, so a bare JSON line cannot occur.
 const api = (path: string, body?: unknown) =>
-  `flagsmith api ${path} -X POST --input -${body ? ` <<'JSON'\n${JSON.stringify(body)}\nJSON` : ''}`
+  `flagsmith api ${path} -X POST --input -${body ? ` <<'JSON'\n${json(body)}\nJSON` : ''}`
 
 const sentence = (e: string) => e.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
 export function configPreview(plan: ExperimentPlan) {
+  const valid = validatePlan(plan).length === 0
   const [, treatment] = plan.variants
   const { primaryMetric: pm } = plan
   const metricName = pm.event === EVENTS.demoCompleted ? 'Demo completed' : sentence(pm.event)
@@ -39,12 +44,20 @@ export function configPreview(plan: ExperimentPlan) {
       hypothesis: plan.hypothesis,
       allocation: { control: plan.allocation.control, [treatment.key]: plan.allocation.treatment },
     },
-    cliSteps: [
-      `flagsmith feature create ${plan.flagKey} --value control --enabled`,
-      `flagsmith feature variant add ${plan.flagKey} --value ${treatment.key} --key ${treatment.key} --weight 0`,
-      api('api/v1/environments/<ENV_KEY>/experiment-metrics/', metricBody),
-      api(exp, experimentBody),
-      api(`${exp}<EXPERIMENT_ID>/start/`),
-    ],
+    valid,
+    blocks: valid
+      ? [
+          {
+            heading: 'Step 1 — approval #1, run separately',
+            commands: [
+              `flagsmith feature create ${plan.flagKey} --value control --enabled`,
+              `flagsmith feature variant add ${plan.flagKey} --value ${treatment.key} --key ${treatment.key} --weight 0`,
+            ],
+          },
+          { heading: 'Step 2 — approval #2, run separately', commands: [api('api/v1/environments/<ENV_KEY>/experiment-metrics/', metricBody)] },
+          { heading: 'Step 3 — approval #3, run separately', commands: [api(exp, experimentBody)] },
+          { heading: 'Step 4 — approval #4, run separately — only after step 3 succeeded', commands: [api(`${exp}<EXPERIMENT_ID>/start/`)] },
+        ]
+      : [],
   }
 }

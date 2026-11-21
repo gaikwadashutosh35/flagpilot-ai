@@ -10,6 +10,13 @@ export const CTA_COPY = {
   benefit_copy: 'Launch an experiment in minutes',
 }
 
+const warned = new Set<string>()
+
 export function ctaCopyFor(variant: string | null | undefined): string {
-  return variant === 'benefit_copy' ? CTA_COPY.benefit_copy : CTA_COPY.control
+  if (variant === 'benefit_copy') return CTA_COPY.benefit_copy
+  if (variant && variant !== 'control' && !warned.has(variant)) {
+    warned.add(variant)
+    console.warn(`Unknown variant "${variant}" for ${FLAG_KEY}; showing control copy.`)
+  }
+  return CTA_COPY.control
 }

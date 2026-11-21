@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   trackEvent: vi.fn(),
   flushEvents: vi.fn(),
   useFlags: vi.fn(),
+  useFlagsmithLoading: vi.fn(),
 }))
 
 vi.mock('@flagsmith/flagsmith', () => ({
@@ -20,6 +21,7 @@ vi.mock('@/lib/identity', () => {
 })
 vi.mock('@flagsmith/flagsmith/react', () => ({
   useFlags: m.useFlags,
+  useFlagsmithLoading: m.useFlagsmithLoading,
   FlagsmithProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
@@ -62,6 +64,7 @@ describe('CopilotPage', () => {
     vi.clearAllMocks()
     m.flushEvents.mockResolvedValue(undefined)
     m.useFlags.mockReturnValue({ flagpilot_onboarding_cta: { variant: 'benefit_copy' } })
+    m.useFlagsmithLoading.mockReturnValue({ isLoading: false, isFetching: false, error: null })
   })
 
   it('blocks Next until the question is 10–500 chars', async () => {
@@ -120,6 +123,26 @@ describe('CopilotPage', () => {
     expect(m.trackEvent).toHaveBeenCalledTimes(1)
     expect(m.trackEvent).toHaveBeenCalledWith('flagpilot_demo_completed')
     expect(screen.getByText(/benefit_copy/)).toBeInTheDocument()
+    expect(screen.getByText('Sent (queued for delivery)')).toBeInTheDocument()
+  })
+
+  it('approve does not wait for a hanging flush', async () => {
+    m.flushEvents.mockReturnValue(new Promise(() => {}))
+    const user = setup()
+    await toReview(user)
+    await approve(user)
+    expect(await screen.findByText('Plan approved')).toBeInTheDocument()
+  })
+
+  it('shows an inline alert if sending throws', async () => {
+    m.trackEvent.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    const user = setup()
+    await toReview(user)
+    await approve(user)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not approve/i)
+    expect(screen.queryByText('Plan approved')).toBeNull()
   })
 
   it('double-click on Approve sends once and shows one Done view', async () => {
@@ -143,13 +166,14 @@ describe('CopilotPage', () => {
     expect(m.trackEvent).toHaveBeenCalledTimes(1)
   })
 
-  it("direct visit without CTA seen: Done says \"not counted: you didn't arrive through the experiment CTA\"", async () => {
+  it('direct visit without CTA seen: Done says "not counted: no experiment exposure for this visitor" and variant none', async () => {
     const user = setup({ seen: false })
     await toReview(user)
     await approve(user)
     expect(
-      await screen.findByText(/not counted: you didn't arrive through the experiment CTA/),
+      await screen.findByText(/not counted: no experiment exposure for this visitor/),
     ).toBeInTheDocument()
+    expect(screen.getByText(/Variant you saw: none/)).toBeInTheDocument()
     expect(m.trackEvent).not.toHaveBeenCalled()
   })
 
@@ -158,9 +182,32 @@ describe('CopilotPage', () => {
     await toReview(user)
     await approve(user)
     expect(await screen.findByText(/Flagsmith unavailable/)).toBeInTheDocument()
-    expect(screen.getByText(/not assigned/)).toBeInTheDocument()
+    expect(screen.getByText(/Variant you saw: none/)).toBeInTheDocument()
     expect(m.useFlags).not.toHaveBeenCalled()
     expect(m.trackEvent).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['SDK error', { isLoading: false, isFetching: false, error: new Error('x') }],
+    ['still loading', { isLoading: true, isFetching: true, error: null }],
+  ])('%s counts as unavailable even with a key', async (_n, state) => {
+    m.useFlagsmithLoading.mockReturnValue(state)
+    const user = setup()
+    await toReview(user)
+    await approve(user)
+    expect(await screen.findByText(/Flagsmith unavailable/)).toBeInTheDocument()
+    expect(m.trackEvent).not.toHaveBeenCalled()
+  })
+
+  it('already counted still shows the variant seen', async () => {
+    const user = setup()
+    await toReview(user)
+    await approve(user)
+    await screen.findByText('Plan approved')
+    await user.click(screen.getByRole('button', { name: 'Start another plan' }))
+    await toReview(user)
+    await approve(user)
+    expect(await screen.findByText(/Variant you saw: benefit_copy/)).toBeInTheDocument()
   })
 
   it('user text renders as text (no HTML injection)', async () => {

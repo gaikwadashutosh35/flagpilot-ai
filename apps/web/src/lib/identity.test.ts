@@ -15,6 +15,13 @@ describe('getVisitorId', () => {
     expect(a.persistent).toBe(true)
   })
 
+  it('caches one identity per page load even if storage changes', async () => {
+    const { getVisitorId } = await import('./identity')
+    const a = getVisitorId()
+    localStorage.clear()
+    expect(getVisitorId()).toEqual(a)
+  })
+
   it('replaces a malformed stored id', async () => {
     localStorage.setItem('flagpilot.visitorId', 'bob@example.com')
     const { getVisitorId } = await import('./identity')
