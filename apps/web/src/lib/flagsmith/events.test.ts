@@ -32,6 +32,7 @@ describe('events', () => {
     const { flagsmith, completeDemo, markCtaSeen } = await load()
     markCtaSeen('fp_1')
     expect(await completeDemo('fp_1', true)).toEqual({ sent: true })
+    expect(localStorage.getItem('flagpilot.completedFor')).toBe('fp_1')
     expect(flagsmith.trackEvent).toHaveBeenCalledExactlyOnceWith('flagpilot_demo_completed')
     expect(flagsmith.flushEvents).toHaveBeenCalledOnce()
     expect(await completeDemo('fp_1', true)).toEqual({ sent: false, reason: 'already_counted' })
@@ -50,6 +51,7 @@ describe('events', () => {
     const { completeDemo, markCtaSeen } = await load()
     markCtaSeen('fp_1')
     markCtaSeen('fp_1')
+    expect(localStorage.getItem('flagpilot.ctaSeenFor')).toBe('fp_1')
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('denied')
     })
