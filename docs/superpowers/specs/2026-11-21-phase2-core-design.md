@@ -92,7 +92,7 @@ FlagPilot AI is entered in Toggle Wars Track 01 ("Test Something Real"). The pro
   - An outer gate watches `useFlagsmithLoading()` and records no exposure.
   - An inner exposure component calls `useExperiment` and renders the button text. The gate mounts it **only** if flags load before the timeout (builder picks the value, about 3 s).
   - If the timeout fires first, the gate shows control copy for the rest of that page view and never mounts the inner component, even if flags arrive later. So an exposure can never be recorded for a variant the visitor didn't see, and the copy never flips mid-view.
-- **CTA seen:** when the inner component mounts, it records `localStorage['flagpilot.ctaSeenFor'] = visitorId`.
+- **CTA seen:** when the inner component renders a flag with `experiment.inExperiment` true (the SDK records the exposure then), it records `localStorage['flagpilot.ctaSeenFor'] = visitorId`.
 - **On click:** call `trackEvent('flagpilot_primary_cta_clicked')` (skipped when unavailable), then navigate to `/copilot`.
 
 **Copilot (`/copilot`)**
@@ -109,25 +109,25 @@ FlagPilot AI is entered in Toggle Wars Track 01 ("Test Something Real"). The pro
   - Checkbox: "I reviewed this plan".
   - **Approve plan** button, enabled only when the plan is valid and the box is ticked.
 - **On approve:**
-  1. Call `completeDemo()` (§5.4). It sends `trackEvent('flagpilot_demo_completed')` and then `flushEvents()`, but only if all of these hold:
-     - Flagsmith is available;
+  1. Call `completeDemo()` (§5.4). It sends `trackEvent('flagpilot_demo_completed')` and then starts `flushEvents()` without awaiting it, but only if all of these hold:
+     - Flagsmith is available (key present, SDK loaded without error);
      - the CTA was seen by this identity (`ctaSeenFor`);
      - this identity has not completed before.
 
-     A flush failure is caught and shown on the status page, never thrown to the user.
+     The flush is fire-and-forget: the SDK flush never rejects, so there is no flush-error state and the status page has no flush-error line.
   2. Store the approved plan in component state. Nothing is persisted server-side.
   3. Show the Done step.
 - **Done step:**
   - "Plan approved".
-  - What was recorded: the variant key you saw, the event name, and whether it was sent or skipped. If skipped, say why: "Flagsmith unavailable", "already counted for this visitor", or "not counted: you didn't arrive through the experiment CTA".
+  - What was recorded: the variant key you saw, the event name, and whether it was sent or skipped. If skipped, say why: "Flagsmith unavailable", "already counted for this visitor", or "not counted: no experiment exposure for this visitor".
   - A link to `/experiment`.
   - "Start another plan". This does **not** send another conversion.
 
 **Experiment status (`/experiment`)**
-- **SDK:** client key present (yes/no only, never the value), flags loaded, events enabled.
+- **SDK:** client key present (yes/no only, never the value) and the Flagsmith state: not configured, loading, loaded, or error (category only, no raw error text).
 - **Identity:** a shortened identifier (first 8 characters) and whether it is persistent.
 - **Assignment:** `variant` and `experiment.inExperiment`, read through `useFlags`, so no exposure is recorded here.
-- **Flagsmith configuration preview:** for the approved plan, or the flagship plan if none, show the exact resources it maps to (flag, variations, metric, experiment allocation) and the CLI steps from §5.6. Label it **"Preview only: applied by the project owner via the Flagsmith CLI after explicit approval. The browser never writes to Flagsmith."**
+- **Flagsmith configuration preview:** for the approved plan, or the flagship plan if none, show the exact resources it maps to (flag, variations, metric, experiment allocation), the target (`Target: project FlagPilot / environment Development`) and the CLI steps from §5.6 as one block per approval (step 1 is flag create plus variant add), each headed with its approval number. Label it **"Preview only: applied by the project owner via the Flagsmith CLI after explicit approval. The browser never writes to Flagsmith."**
 
 ### 5.2 Deterministic plan generator
 
@@ -213,7 +213,7 @@ Each approval request shows the target project/environment (FlagPilot / Developm
   - `validatePlan` rules;
   - `ctaCopyFor`: each variant, `null`, and an unknown key;
   - `EVENTS` exact strings;
-  - `completeDemo`: fires once per identity and flushes; a flush error is caught.
+  - `completeDemo`: fires once per identity and starts a flush without waiting for it.
 - **Component (RTL, `@flagsmith/flagsmith/react` mocked):**
   - CTA shows a skeleton while flags load, then the right copy per variant;
   - after the timeout, the exposure component is never mounted, even when flags arrive later;
@@ -256,3 +256,11 @@ Following `docs/MODEL_ROUTING.md`:
 - The router API details, which must be checked in the router docs.
 - How to split the provider/fallback components.
 - Applying the TS 7 → 6 fallback rule in §3.
+
+## Amendments (2026-11-21, final review)
+- CTA seen is recorded only when the inner component renders a flag with `experiment.inExperiment` true, not on mount.
+- Done `cta_not_seen` copy is `not counted: no experiment exposure for this visitor`.
+- The flush is fire-and-forget (the SDK flush never rejects); the status page has no flush-error line.
+- Copilot "unavailable" includes SDK error and not-yet-loaded, not only a missing key.
+- The status page shows the Flagsmith state (not configured / loading / loaded / error) instead of "events enabled".
+- The config preview shows one block per approval with the target, and no commands for an invalid plan.
