@@ -33,7 +33,7 @@
 1. Warehouse is Pending Connection — re-check before creating any experiment in Phase 2.
 2. Free-plan entitlement for Experimentation is not confirmed by any official source (the dashboard does show Experiments and Metrics).
 3. No official rule found on whether code written before hacking starts (Nov 26, 2026, 8:00 AM IST) may be included; to confirm with organisers and disclose in the README.
-4. Flagsmith docs say an experiment starts as soon as it is created, so "approve create" and "approve start" cannot be separate steps; Phase 2 must design the approval gate around this.
+4. ~~Flagsmith docs say an experiment starts as soon as it is created, so "approve create" and "approve start" cannot be separate steps.~~ **Corrected in Phase 2:** the official coding-agent guide creates an experiment with `POST …/experiments/` and starts it with a separate `POST …/experiments/<id>/start/`, so create and start get separate approvals.
 5. Port 5173 is occupied by another local process (Vite falls back to 5174).
 
 ## Phase 1 exit checklist
