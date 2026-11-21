@@ -22,7 +22,7 @@ export function QuestionStep({ onNext }: { onNext: (input: PlanInput) => void })
         <Label htmlFor="question">Your question</Label>
         <Textarea id="question" value={question} maxLength={500} onChange={(e) => setQuestion(e.target.value)} />
         <p className="text-xs text-muted-foreground">{len}/500 (minimum 10)</p>
-        <Button type="button" variant="outline" size="sm" onClick={() => setQuestion(FLAGSHIP_QUESTION)}>
+        <Button type="button" variant="outline" size="sm" className="h-auto whitespace-normal py-1 text-left" onClick={() => setQuestion(FLAGSHIP_QUESTION)}>
           {FLAGSHIP_QUESTION}
         </Button>
       </div>

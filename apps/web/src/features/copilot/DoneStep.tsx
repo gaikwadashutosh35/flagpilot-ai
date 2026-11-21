@@ -28,7 +28,7 @@ export function DoneStep({ result, onRestart }: { result: CompleteResult; onRest
         <li>{result.sent ? 'Sent' : `Skipped: ${SKIP_COPY[result.reason]}`}</li>
       </ul>
       <div className="flex gap-2">
-        <Button render={<Link to="/experiment" />} variant="outline">View experiment status</Button>
+        <Button nativeButton={false} render={<Link to="/experiment" />} variant="outline">View experiment status</Button>
         <Button onClick={onRestart}>Start another plan</Button>
       </div>
     </div>
