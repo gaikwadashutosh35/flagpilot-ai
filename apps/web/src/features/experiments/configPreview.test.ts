@@ -16,7 +16,22 @@ describe('configPreview', () => {
   it('maps resources from the plan', () => {
     const p = configPreview(generatePlan({ question: FLAGSHIP_QUESTION }))
     expect(p.flag.variations).toEqual([{ key: 'benefit_copy', value: 'benefit_copy', weight: 0 }])
+    expect(p.metric.name).toBe('Demo completed')
     expect(p.metric).toMatchObject({ event: 'flagpilot_demo_completed', aggregation: 'occurrence', direction: 'up' })
     expect(p.experiment.allocation).toEqual({ control: 50, benefit_copy: 50 })
+  })
+
+  it('uses a sentence-case metric name for other events', () => {
+    const plan = generatePlan({ question: 'Does a shorter signup form help?', successAction: 'signup_completed' })
+    expect(configPreview(plan).metric.name).toBe('Signup completed')
+  })
+
+  it('emits bodies via quoted heredoc so apostrophes stay verbatim', () => {
+    const plan = { ...generatePlan({ question: FLAGSHIP_QUESTION }), hypothesis: "Visitor's copy wins" }
+    const steps = configPreview(plan).cliSteps
+    expect(steps[3]).toContain("Visitor's copy wins")
+    expect(steps[3]).toContain("-X POST --input - <<'JSON'\n")
+    expect(steps[3].endsWith('\nJSON')).toBe(true)
+    expect(steps.join('\n')).not.toContain("echo '")
   })
 })

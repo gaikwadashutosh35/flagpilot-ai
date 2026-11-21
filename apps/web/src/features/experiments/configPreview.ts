@@ -1,12 +1,16 @@
+import { EVENTS } from '@/lib/flagsmith/constants'
 import type { ExperimentPlan } from '../copilot/plan'
 
+// Quoted heredoc: the shell interprets nothing in the body. JSON.stringify is single-line, so a bare JSON line cannot occur.
 const api = (path: string, body?: unknown) =>
-  `${body ? `echo '${JSON.stringify(body)}' | ` : ''}flagsmith api ${path} -X POST --input -`
+  `flagsmith api ${path} -X POST --input -${body ? ` <<'JSON'\n${JSON.stringify(body)}\nJSON` : ''}`
+
+const sentence = (e: string) => e.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
 export function configPreview(plan: ExperimentPlan) {
   const [, treatment] = plan.variants
   const { primaryMetric: pm } = plan
-  const metricName = pm.event.replace(/_/g, ' ')
+  const metricName = pm.event === EVENTS.demoCompleted ? 'Demo completed' : sentence(pm.event)
   const exp = 'api/v1/environments/<ENV_KEY>/experiments/'
 
   const metricBody = { name: metricName, aggregation: pm.aggregation, direction: pm.direction, definition: { version: 1, event: pm.event } }
