@@ -40,7 +40,13 @@ export async function run({
   refresh = false,
   target = snapshotPath,
 } = {}) {
-  const envKey = JSON.parse(await rf(path.join(repoRoot, 'flagsmith.json'))).environment
+  let envKey
+  try {
+    envKey = JSON.parse(await rf(path.join(repoRoot, 'flagsmith.json'))).environment
+  } catch {
+    throw new Error('invalid flagsmith.json')
+  }
+  if (typeof envKey !== 'string' || !envKey) throw new Error('invalid flagsmith.json')
   const call = async (args) => {
     const out = await exec(args)
     assertNoServerKey(out)
@@ -63,11 +69,22 @@ export async function run({
 
   let snap = buildSnapshot({ experiment: null, exposures: null, results: null, capturedAt: null })
   let line = 'no experiment'
+  let refused = false
   if (found) {
     const url = `${base}${found.id}/`
     if (refresh) {
-      await call(['api', `${url}results/refresh/`, '-X', 'POST'])
-      await call(['api', `${url}exposures/refresh/`, '-X', 'POST'])
+      // A refused refresh (rate limit) makes the CLI exit 1: keep last results. Only the exec is guarded,
+      // so a server key in a successful body still aborts.
+      for (const kind of ['results', 'exposures']) {
+        let out
+        try {
+          out = await exec(['api', `${url}${kind}/refresh/`, '-X', 'POST'])
+        } catch {
+          refused = true
+          continue
+        }
+        assertNoServerKey(out)
+      }
       await sleep(60000)
     }
     const detail = await json(['api', url])
@@ -76,7 +93,7 @@ export async function run({
     const experiment = mapExperiment(detail ?? found)
     const capturedAt = now().toISOString()
     snap = buildSnapshot({ experiment, exposures, results, capturedAt })
-    line = `experiment ${experiment.id} ${experiment.status}; results ${results === null ? 'null' : 'present'}; captured ${capturedAt}`
+    line = `experiment ${experiment.id} ${experiment.status}; results ${results === null ? 'null' : 'present'}; captured ${capturedAt}${refused ? '; refresh refused' : ''}`
   }
 
   // Only reached after every call succeeded: temp file + rename so no partial file is left.

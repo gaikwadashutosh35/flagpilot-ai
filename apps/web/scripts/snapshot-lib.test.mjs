@@ -92,6 +92,49 @@ describe('run', () => {
     expect(written).not.toContain('ENVKEY')
     expect(JSON.parse(written).exposures).toEqual({ note: '[ENV_KEY]' })
   })
+  const found = (d, postFails) => {
+    d.exec = vi.fn(async (args) => {
+      if (args[0] === 'feature') return '{"id":299210}'
+      if (args[2] === '-X') {
+        if (postFails) throw new Error('cli call failed')
+        return ''
+      }
+      const p = args[1]
+      if (p.endsWith('/experiments/')) return '[{"id":3,"feature":299210,"status":"running"}]'
+      if (p.endsWith('/3/')) return '{"id":3,"name":"n","status":"running","started_at":null,"ended_at":null}'
+      return 'null'
+    })
+  }
+  it('continues and says so when a refresh POST is refused', async () => {
+    const d = base()
+    d.refresh = true
+    found(d, true)
+    const line = await run(d)
+    expect(line).toMatch(/; refresh refused$/)
+    expect(d.writeFile).toHaveBeenCalledTimes(1)
+  })
+  it('makes no POSTs and does not sleep without --refresh', async () => {
+    const d = base()
+    found(d, false)
+    const line = await run(d)
+    expect(line).not.toContain('refresh refused')
+    expect(d.exec.mock.calls.filter((c) => c[0][2] === '-X')).toHaveLength(0)
+    expect(d.sleep).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['{"environment":"FAKEKEY123" oops', 'FAKEKEY123'],
+    ['{"environment":""}', 'environment'],
+    ['{"project":1}', 'project'],
+    ['{"environment":42}', '42'],
+  ])('rejects invalid flagsmith.json without echoing it (%s)', async (content, leak) => {
+    const d = base()
+    d.readFile = vi.fn(async () => content)
+    d.exec = vi.fn()
+    const err = await run(d).catch((e) => e)
+    expect(err.message).toBe('invalid flagsmith.json')
+    expect(err.message).not.toContain(leak)
+    expect(d.exec).not.toHaveBeenCalled()
+  })
   it('rejects on a server key in a response', async () => {
     const d = base()
     d.exec = vi.fn(async (args) => (args[0] === 'feature' ? '{"id":1}' : '{"x":"ser.abc"}'))
