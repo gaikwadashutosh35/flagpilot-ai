@@ -18,3 +18,12 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Previews and branch deploys build with Flagsmith off, so they never send
+# exposures or conversions into the real experiment. Production keeps the
+# client key set in Netlify's UI.
+[context.deploy-preview.environment]
+  VITE_FLAGSMITH_ENVIRONMENT_KEY = ""
+
+[context.branch-deploy.environment]
+  VITE_FLAGSMITH_ENVIRONMENT_KEY = ""

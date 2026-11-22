@@ -213,3 +213,4 @@ Owner decision: deploy on **Netlify** instead of Vercel. Config lives in the rep
 
 ## Amendment (2026-11-22) — Flagsmith response shapes
 List and detail responses return `feature` as an object with `id`; the script accepts both an object and an integer.
+- Deploy Previews and Branch deploys override `VITE_FLAGSMITH_ENVIRONMENT_KEY` to an empty string in `netlify.toml`, so only Production talks to Flagsmith.
