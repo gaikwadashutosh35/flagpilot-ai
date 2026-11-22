@@ -33,6 +33,7 @@ describe('ResultsPage', () => {
 
   it('running with results null', () => {
     show(snap('running'))
+    expect(screen.getByText('Status: Running')).toBeInTheDocument()
     expect(screen.getByText("Flagsmith hasn't computed results yet.")).toBeInTheDocument()
     expect(screen.getByText(/From Flagsmith, as of \S+/)).toBeInTheDocument()
   })
@@ -46,6 +47,7 @@ describe('ResultsPage', () => {
   it('paused', () => {
     show(snap('paused'))
     expect(screen.getByText('Paused')).toBeInTheDocument()
+    expect(screen.getByText("Flagsmith hasn't computed results yet.")).toBeInTheDocument()
   })
 
   it('results present before mapping', () => {
@@ -65,6 +67,7 @@ describe('ResultsPage', () => {
 
   it('always shows provenance and dashboard link', () => {
     show()
+    expect(screen.queryByText('Snapshot unreadable')).toBeNull()
     expect(screen.getByText('Snapshot updated by the project owner via the Flagsmith CLI')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open Flagsmith (Flagsmith login required)' })).toHaveAttribute(
       'href',

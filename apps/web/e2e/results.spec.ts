@@ -6,7 +6,8 @@ test('results page shows the committed snapshot state', async ({ page }) => {
   const hits = watchFlagsmith(page)
 
   await page.goto('/results')
-  await expect(page.getByText('No experiment running yet.')).toBeVisible()
+  await expect(page.getByText(/^From Flagsmith/)).toBeVisible()
+  await expect(page.getByText('Snapshot unreadable')).toHaveCount(0)
   await expect(page.getByText('Snapshot updated by the project owner via the Flagsmith CLI')).toBeVisible()
 
   // Keyboard-only: reach /results from the TopBar link.
@@ -14,7 +15,8 @@ test('results page shows the committed snapshot state', async ({ page }) => {
   await tabTo(page, 'Results')
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/results$/)
-  await expect(page.getByText('No experiment running yet.')).toBeVisible()
+  await expect(page.getByText(/^From Flagsmith/)).toBeVisible()
+  await expect(page.getByText('Snapshot unreadable')).toHaveCount(0)
   await noHScroll(page)
   expect(hits).toEqual([])
 })

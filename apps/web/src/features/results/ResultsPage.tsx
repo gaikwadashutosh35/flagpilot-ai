@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { loadSnapshot } from './loadSnapshot'
 import snapshotJson from './snapshot.json'
 
+const STATUS = { created: 'Created', running: 'Running', paused: 'Paused', completed: 'Ended' }
 const when = (v: string) => new Date(v).toLocaleString()
 
 export function ResultsPage({ data = snapshotJson }: { data?: unknown }) {
@@ -36,9 +37,13 @@ export function ResultsPage({ data = snapshotJson }: { data?: unknown }) {
               </p>
             </>
           ) : exp.status === 'created' ? (
-            <p>Experiment created, not started yet.</p>
+            <>
+              <p className="text-sm">Status: {STATUS[exp.status]}</p>
+              <p>Experiment created, not started yet.</p>
+            </>
           ) : (
             <>
+              <p className="text-sm">Status: {STATUS[exp.status]}</p>
               {exp.status === 'paused' && <Badge>Paused</Badge>}
               {exp.status === 'completed' && <Badge>Ended — results final</Badge>}
               {exp.startedAt && <p className="text-sm">Started {when(exp.startedAt)}</p>}
