@@ -24,6 +24,20 @@ Test FlagPilot's own onboarding CTA:
 
 Do not call a CTA click a signup or completion. Do not fabricate exposures, conversions, statistical significance or a winning variant. Clearly label synthetic traffic used for pipeline verification.
 
+## Pre-registered decision rule
+
+Written on 2026-11-22, before the experiment was started and before any results existed. It does not change after data arrives.
+
+- **Experiment:** flag `flagpilot_onboarding_cta`. Control is `control`, "Create your first experiment". The treatment is `benefit_copy`, "Launch an experiment in minutes". Traffic is split 50/50.
+- **Hypothesis:** benefit-oriented CTA copy increases genuine demo completion.
+- **Primary metric:** "Demo completed" (`flagpilot_demo_completed`, occurrence, higher is better). It fires only when a visitor approves an experiment plan, after they have seen the CTA.
+- **Measurement window:** from the experiment's start until judging (submissions close Nov 29, 2026, 8:00 PM IST).
+- **Minimum sample:** at least 50 identities and at least 5 conversions in each version. This is Flagsmith's own "Collecting data" threshold.
+- **Calling a winner:** a version is called the winner only if, once the minimum sample is reached, Flagsmith reports above a 95% chance that it beats the other version.
+- **Otherwise:** the result is reported as **inconclusive**, meaning there is no evidence that either copy is better. In that case the current control copy stays the default.
+- **Source of numbers:** every number comes from Flagsmith's results, shown on `/results` with the time it was captured. We never compute our own winner, and we never round a number into a claim.
+- **Our own traffic:** the team's own test sessions use fresh browser profiles and are disclosed. No synthetic traffic is sent.
+
 ## Stack
 
 - React + Vite + TypeScript
