@@ -76,7 +76,10 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 ## Owner actions open
 
 1. **Flagsmith:** ask in the Flagsmith Discord why the Development warehouse is stuck in Pending Connection after receiving an event.
-2. **Netlify:** scope `VITE_FLAGSMITH_ENVIRONMENT_KEY` to the Production context and keep fork deploy previews on "require approval". Otherwise preview builds of this public repo could send traffic into the experiment (security L8).
+2. ~~**Netlify:** scope `VITE_FLAGSMITH_ENVIRONMENT_KEY` to the Production context and keep fork deploy previews on "require approval".~~ **Done 2026-11-22.**
+   - `netlify.toml` sets the key to an empty string for `deploy-preview` and `branch-deploy`. Netlify documents that `netlify.toml` values override UI values, so only Production builds with the key.
+   - The "Untrusted deploys policy" was already "Require approval".
+   - Production re-verified after the redeploy: "Client key present: yes", "Flagsmith: loaded", flags request 200.
 3. **`apps/web/vercel.json`:** this file is unused since the move to Netlify. Delete it with your OK.
 
 ## Blockers and risks
