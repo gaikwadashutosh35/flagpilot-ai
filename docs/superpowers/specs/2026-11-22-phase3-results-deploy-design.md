@@ -210,3 +210,6 @@ Per `docs/MODEL_ROUTING.md`:
 
 ## Amendment (2026-11-22) — deploy target
 Owner decision: deploy on **Netlify** instead of Vercel. Config lives in the repo-root `netlify.toml` (base `apps/web`, command `npm run build`, publish `dist`, `NODE_VERSION = "24"`, SPA rewrite `/* → /index.html 200`). Production branch `master`. `VITE_FLAGSMITH_ENVIRONMENT_KEY` (the Development client key) is set by the owner in Netlify's environment variables. `apps/web/vercel.json` is unused.
+
+## Amendment (2026-11-22) � Flagsmith response shapes
+List and detail responses return `feature` as an object with `id`; the script accepts both an object and an integer.

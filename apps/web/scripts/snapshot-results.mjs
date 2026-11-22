@@ -1,40 +1,58 @@
 // Run from the repo root: node apps/web/scripts/snapshot-results.mjs [--refresh]
 import { execFile } from 'node:child_process'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { statSync } from 'node:fs'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { assertNoServerKey, buildSnapshot, mapExperiment, redact, selectExperiment } from './snapshot-lib.mjs'
+import { assertNoServerKey, buildSnapshot, isBody, isEnvKey, scan, selectExperiment, validateExperiment } from './snapshot-lib.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..', '..')
 const snapshotPath = path.join(here, '..', 'src', 'features', 'results', 'snapshot.json')
 const FLAG = 'flagpilot_onboarding_cta'
 
-const run1 = (bin, args) =>
-  new Promise((resolve, reject) =>
-    execFile(bin, args, { maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(stdout))),
-  )
+const exe = process.platform === 'win32' ? 'flagsmith.exe' : 'flagsmith'
+const isFile = (p) => {
+  try {
+    return statSync(p).isFile()
+  } catch {
+    return false
+  }
+}
 
-// Real CLI: FLAGSMITH_BIN, else PATH, else ~/.local/bin. Errors are generic: args carry the env key.
-async function realExec(args) {
-  const home = path.join(os.homedir(), '.local', 'bin', process.platform === 'win32' ? 'flagsmith.exe' : 'flagsmith')
-  const bins = [process.env.FLAGSMITH_BIN, 'flagsmith', home].filter(Boolean)
-  for (const bin of bins) {
-    try {
-      return await run1(bin, args)
-    } catch (e) {
-      if (e?.code !== 'ENOENT') throw new Error('cli call failed')
-    }
+// Absolute paths only: never execute a bare name (Windows searches the current directory first).
+function resolveBin(env = process.env) {
+  if (env.FLAGSMITH_BIN) {
+    if (path.isAbsolute(env.FLAGSMITH_BIN) && isFile(env.FLAGSMITH_BIN)) return env.FLAGSMITH_BIN
+    throw new Error('FLAGSMITH_BIN not found')
+  }
+  const dirs = [path.join(os.homedir(), '.local', 'bin'), ...(env.PATH ?? '').split(path.delimiter)]
+  for (const dir of dirs) {
+    if (!dir || !path.isAbsolute(dir)) continue
+    const bin = path.join(dir, exe)
+    if (isFile(bin)) return bin
   }
   throw new Error('flagsmith cli not found')
 }
 
+// Errors are generic: the CLI's error output carries a URL with the env key.
+function realExec() {
+  const bin = resolveBin()
+  return (args) =>
+    new Promise((resolve, reject) =>
+      execFile(bin, args, { cwd: repoRoot, timeout: 60000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) =>
+        err ? reject(new Error('cli call failed')) : resolve(stdout),
+      ),
+    )
+}
+
 export async function run({
-  exec = realExec,
+  exec = realExec(),
   readFile: rf = (p) => readFile(p, 'utf8'),
   writeFile: wf = writeFile,
   rename: mv = rename,
+  rm: del = (p) => rm(p, { force: true }),
   now = () => new Date(),
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   refresh = false,
@@ -46,60 +64,77 @@ export async function run({
   } catch {
     throw new Error('invalid flagsmith.json')
   }
-  if (typeof envKey !== 'string' || !envKey) throw new Error('invalid flagsmith.json')
-  const call = async (args) => {
-    const out = await exec(args)
-    assertNoServerKey(out)
-    return redact(out, envKey)
+  if (!isEnvKey(envKey)) throw new Error('invalid flagsmith.json')
+  const step = async (name, args) => {
+    try {
+      return await exec(args)
+    } catch {
+      throw new Error(`cli call failed (${name})`)
+    }
   }
-  const json = async (args) => {
-    const out = (await call(args)).trim()
+  const json = async (name, args) => {
+    const out = (await step(name, args)).trim()
+    assertNoServerKey(out)
     if (!out) return null
     try {
-      return JSON.parse(out)
-    } catch {
-      throw new Error('invalid JSON from cli')
+      return scan(JSON.parse(out), envKey)
+    } catch (e) {
+      throw e.message === 'server key detected' ? e : new Error('invalid JSON from cli')
     }
   }
   const base = `api/v1/environments/${envKey}/experiments/`
 
-  const flag = await json(['feature', 'get', FLAG, '--json'])
+  const flag = await json('flag', ['feature', 'get', FLAG, '--json'])
   if (typeof flag?.id !== 'number') throw new Error('flag id not found')
-  const found = selectExperiment(await json(['api', base]), flag.id)
+  const list = await json('list', ['api', base])
+  const arr = Array.isArray(list) ? list : Array.isArray(list?.results) ? list.results : null
+  if (!arr) throw new Error('unexpected experiments list')
+  if (!Array.isArray(list) && list.next != null) throw new Error('experiments list is paginated')
+  const found = selectExperiment(arr, flag.id)
 
   let snap = buildSnapshot({ experiment: null, exposures: null, results: null, capturedAt: null })
-  let line = 'no experiment'
-  let refused = false
+  let line = `no experiment (${arr.length} listed)`
   if (found) {
+    if (!Number.isInteger(found.id) || found.id <= 0) throw new Error('unexpected experiment detail')
     const url = `${base}${found.id}/`
+    let failed = 0
     if (refresh) {
-      // A refused refresh (rate limit) makes the CLI exit 1: keep last results. Only the exec is guarded,
+      // A failed refresh (rate limit) makes the CLI exit 1: keep last results. Only the exec is guarded,
       // so a server key in a successful body still aborts.
       for (const kind of ['results', 'exposures']) {
         let out
         try {
           out = await exec(['api', `${url}${kind}/refresh/`, '-X', 'POST'])
         } catch {
-          refused = true
+          failed++
           continue
         }
         assertNoServerKey(out)
       }
-      await sleep(60000)
+      if (failed < 2) await sleep(60000)
     }
-    const detail = await json(['api', url])
-    const exposures = await json(['api', `${url}exposures/`])
-    const results = await json(['api', `${url}results/`])
-    const experiment = mapExperiment(detail ?? found)
+    const detail = await json('detail', ['api', url])
+    const exposures = await json('exposures', ['api', `${url}exposures/`])
+    const results = await json('results', ['api', `${url}results/`])
+    const experiment = validateExperiment(detail, found)
+    if (!isBody(exposures) || !isBody(results)) throw new Error('unexpected results body')
     const capturedAt = now().toISOString()
     snap = buildSnapshot({ experiment, exposures, results, capturedAt })
-    line = `experiment ${experiment.id} ${experiment.status}; results ${results === null ? 'null' : 'present'}; captured ${capturedAt}${refused ? '; refresh refused' : ''}`
+    line = `experiment ${experiment.id} ${experiment.status}; results ${results === null ? 'null' : 'present'}; captured ${capturedAt}${failed ? '; refresh failed' : ''}`
   }
 
-  // Only reached after every call succeeded: temp file + rename so no partial file is left.
+  const text = JSON.stringify(scan(snap, null, { sensitive: true }), null, 2) + '\n'
+  assertNoServerKey(text)
+  if (text.includes(envKey)) throw new Error('client key in snapshot')
+  // Temp file + rename so no partial file is left.
   const tmp = `${target}.tmp`
-  await wf(tmp, JSON.stringify(snap, null, 2) + '\n')
-  await mv(tmp, target)
+  try {
+    await wf(tmp, text)
+    await mv(tmp, target)
+  } catch (e) {
+    await Promise.resolve(del(tmp)).catch(() => {})
+    throw e
+  }
   return line
 }
 
