@@ -4,6 +4,7 @@ import { ApprovedPlanProvider } from '@/features/copilot/approvedPlan'
 import { CopilotPage } from '@/features/copilot/CopilotPage'
 import { ExperimentStatusPage } from '@/features/experiments/ExperimentStatusPage'
 import { LandingPage } from '@/features/playground/LandingPage'
+import { ResultsPage } from '@/features/results/ResultsPage'
 
 export function AppRoutes() {
   return (
@@ -14,6 +15,7 @@ export function AppRoutes() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/copilot" element={<CopilotPage />} />
           <Route path="/experiment" element={<ExperimentStatusPage />} />
+          <Route path="/results" element={<ResultsPage />} />
         </Routes>
       </ApprovedPlanProvider>
     </>

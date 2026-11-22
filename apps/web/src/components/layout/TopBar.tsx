@@ -5,6 +5,7 @@ export function TopBar() {
     <header className="flex items-center gap-4 border-b px-4 py-3">
       <Link to="/">Home</Link>
       <Link to="/experiment">Experiment status</Link>
+      <Link to="/results">Results</Link>
     </header>
   )
 }

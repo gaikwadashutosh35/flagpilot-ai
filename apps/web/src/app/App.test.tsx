@@ -12,6 +12,7 @@ describe('AppRoutes', () => {
     )
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Experiment status' })).toHaveAttribute('href', '/experiment')
+    expect(screen.getByRole('link', { name: 'Results' })).toHaveAttribute('href', '/results')
     expect(screen.getByTestId('landing-page')).toBeInTheDocument()
   })
 
