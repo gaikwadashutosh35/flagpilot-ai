@@ -14,8 +14,9 @@ export function ResultsPage({ data = snapshotJson }: { data?: unknown }) {
     <main data-testid="results-page" className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
       <h1 className="text-2xl font-semibold">Results</h1>
       <p className="text-sm text-muted-foreground">
-        {snap?.capturedAt ? `From Flagsmith, as of ${when(snap.capturedAt)}` : 'No snapshot captured yet'}
+        {snap?.capturedAt ? `From Flagsmith, as of ${when(snap.capturedAt)}` : 'From Flagsmith'}
       </p>
+      {snap && !snap.capturedAt && <p className="text-sm text-muted-foreground">No snapshot captured yet</p>}
       <p className="text-sm text-muted-foreground">Snapshot updated by the project owner via the Flagsmith CLI</p>
       <a className="text-sm underline" href="https://app.flagsmith.com/" target="_blank" rel="noreferrer">
         Open Flagsmith (Flagsmith login required)

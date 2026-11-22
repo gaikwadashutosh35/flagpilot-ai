@@ -23,6 +23,7 @@ describe('ResultsPage', () => {
     show({ schemaVersion: 1, capturedAt: null, experiment: null, exposures: null, results: null })
     expect(screen.getByText('No experiment running yet.')).toBeInTheDocument()
     expect(screen.getByText(/No snapshot captured yet/)).toBeInTheDocument()
+    expect(screen.getByText('From Flagsmith')).toBeInTheDocument()
   })
 
   it('created', () => {
@@ -58,6 +59,8 @@ describe('ResultsPage', () => {
   it('invalid snapshot', () => {
     show({ schemaVersion: 9 })
     expect(screen.getByText('Snapshot unreadable')).toBeInTheDocument()
+    expect(screen.getByText('From Flagsmith')).toBeInTheDocument()
+    expect(screen.queryByText(/No snapshot captured yet/)).toBeNull()
   })
 
   it('always shows provenance and dashboard link', () => {
