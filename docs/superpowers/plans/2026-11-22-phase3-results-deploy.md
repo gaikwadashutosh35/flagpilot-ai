@@ -33,7 +33,7 @@
 - Refresh at most once per 5 minutes, and only with `--refresh`.
 - **Vercel:** `vercel.json` is `{ "rewrites": [ { "source": "/(.*)", "destination": "/index.html" } ] }`. `package.json` `"engines": { "node": ">=22.12" }`. Env `VITE_FLAGSMITH_ENVIRONMENT_KEY` is the Development client key.
 - Tests import from `vitest` (no globals). Never stage `.env.local`, `node_modules`, `dist`, root `MODEL_ROUTING.md`/`SKILL.md`. End commits with the Co-Authored-By line for the model that wrote them.
-- Every Flagsmith write (experiment create, start, refresh) runs only from the main session, after its own owner approval in chat. Refresh is pre-approved as part of the snapshot routine (spec §5.2), but every run is logged.
+- Every Flagsmith write (experiment create, start, go-live rollout PATCH, refresh) runs only from the main session, after its own owner approval in chat. Refresh is pre-approved as part of the snapshot routine (spec §5.2), but every run is logged.
 
 ## Review Focus
 
@@ -173,12 +173,14 @@ it('runner leaves the snapshot byte-identical when a CLI call fails', async () =
 
 ### Task 6: Start the experiment and capture the first real results [main session, gated on warehouse = Connected]
 
-- [ ] Check the warehouse (`flagsmith api api/v1/environments/<key>/warehouse-connections/`). If it is not Connected, stop here and record that.
-- [ ] **Approval #3:**
-  - Show the owner the exact experiment body: flag `299210`, name "Onboarding CTA copy", hypothesis "Benefit-oriented CTA copy increases genuine demo completion.", metric `319` with `expected_direction: "increase"`, rollout 100%, `benefit_copy` (variant `36243`) at 50%, control the remainder.
-  - After a yes, `POST …/experiments/` with `--input -`. Record the ID and confirm status `created`.
-- [ ] **Approval #4:** after a yes, `POST …/experiments/<id>/start/`, then GET it and confirm status `running`.
-- [ ] **Live verification (spec §5.5)** in a fresh browser profile, with owner OK for one genuine session:
+Parked from the Phase 3 fix wave, do before the first real snapshot: harden experiment selection so a flag-matching item with an unknown status throws.
+
+- [x] Check the warehouse (`flagsmith api api/v1/environments/<key>/warehouse-connections/`). Connected 2026-11-23 05:16 UTC (warehouse 10645).
+- [x] **Approval #3:** experiment 394 created 2026-11-23 06:24 UTC, status `created`.
+  - Body: feature `299210`, name "Onboarding CTA copy", hypothesis "Benefit-oriented CTA copy increases genuine demo completion.", metric `319` with `expected_direction: "increase"`, `experiment_rollout` enabled false, `rollout_percentage` 0, value `control`, option `36243` (`benefit_copy`) at 50.
+- [ ] **Approval #4 (start):** on or after 2026-11-26 08:00 IST, after a yes, `POST …/experiments/394/start/` as a bodyless POST (do not use `--input -`), then GET it, confirm status `running`, and record Flagsmith's `started_at` in the README amendment.
+- [ ] **Approval #5 (go live):** asked separately, run right after #4. After a yes, `PATCH …/experiments/394/rollout/` with `enabled: true`, `rollout_percentage: 100`, value `control`, option `36243` at 50. GET the experiment and confirm `experiment_rollout` shows enabled true, 100%. Record the go-live time in the README amendment.
+- [ ] **Live verification (spec §5.5), after approval #5,** in a fresh browser profile, with owner OK for one genuine session:
   - the flags response has `experiment.inExperiment: true`;
   - events POST returns 202 after the CTA renders and after the click;
   - approve a plan, and Done shows "Sent (queued for delivery)".
@@ -193,7 +195,7 @@ it('runner leaves the snapshot byte-identical when a CLI call fails', async () =
   - Show per variant only the fields present (missing → "—").
   - Verdict source order: Flagsmith's own verdict field if present; else Flagsmith's documented thresholds applied to Flagsmith's numbers ("Collecting data" if any arm has fewer than 50 identities or fewer than 5 conversions; "Inconclusive" if the interval crosses zero; "Leading: <variant>" only if win probability is above 95%; else "Inconclusive").
   - Name the source ("Verdict from Flagsmith" / "Verdict per Flagsmith's documented thresholds").
-  - Show an SRM warning if present.
+  - Show Flagsmith's SRM result if present; when it is null, say "SRM check not available from Flagsmith".
 - [ ] Tests first, against `real-results.json` plus small edited copies, one per verdict branch. Replace the Task 1 "Results captured…" placeholder only for snapshots that match the confirmed shape. An unrecognised shape keeps the placeholder.
 - [ ] Full gate; commit `feat(web): Flagsmith results table and verdict`.
 

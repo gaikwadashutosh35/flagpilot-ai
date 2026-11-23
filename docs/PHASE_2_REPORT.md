@@ -82,3 +82,9 @@ Fable (`architecture-advisor`) was not used; nothing called for that level of es
 ## Next (Phase 3)
 
 When the warehouse is Connected: approval #3 (create the experiment, 50/50), then approval #4 (start it). Then check that real exposures and conversions arrive, build the results view from Flagsmith data with honest collecting and inconclusive states, and deploy.
+
+## Update (2026-11-23)
+
+- The warehouse is Connected (2026-11-23 05:16 UTC). It stayed Pending Connection because, in Flagsmith's public source, Flagsmith only moves a managed connection when its test-connection call runs and finds an event; one owner-approved call fixed it.
+- The approval order is now #3 create at 0% rollout, #4 start, #5 go live. In Flagsmith's public source, the rollout applies at create and enrollment is only marked while running, so the documented create body would show the split before start with no exposures recorded.
+- Experiment 394 was created on 2026-11-23 06:24 UTC (approval #3).

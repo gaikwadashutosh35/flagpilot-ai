@@ -1,6 +1,6 @@
-# Phase 3 Report — FlagPilot AI (interim, 2026-11-22)
+# Phase 3 Report — FlagPilot AI (interim, updated 2026-11-23)
 
-**Status: interim.** Results page, snapshot pipeline, tests, public repo, Netlify deploy, security review and fixes are done. Experiment create/start, live verification and the real results view (plan Tasks 6–7) are **blocked on the Flagsmith warehouse**, still `pending_connection`.
+**Status: interim.** Results page, snapshot pipeline, tests, public repo, Netlify deploy, security review and fixes are done. The Flagsmith warehouse is resolved (connected 2026-11-23) and experiment 394 is created. Start, go-live, live verification, the first real snapshot and the real results view (plan Tasks 6–7) are still to do.
 
 Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amended: Netlify; `feature` is an object in list responses). Plan: `docs/superpowers/plans/2026-11-22-phase3-results-deploy.md`.
 
@@ -59,8 +59,8 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 |---|---|
 | Flag `flagpilot_onboarding_cta` (id 299210), variant `benefit_copy` (id 36243) | Live, served to the deployed app |
 | Metric "Demo completed" (id 319) | Created |
-| Warehouse (Flagsmith managed) | **`pending_connection`**. It has received 1 event (the owner-approved CTA click on 2026-11-21 17:28 UTC) and has stayed pending for over 12 hours. |
-| Experiment | Not created. Approvals #3 (create) and #4 (start) wait on the warehouse. |
+| Warehouse 10645 (Flagsmith managed, Development) | **`connected`** on 2026-11-23 05:16 UTC. It was `pending_connection` from 2026-11-21 14:59 UTC; the first event arrived 2026-11-21 17:28 UTC. One owner-approved `POST …/warehouse-connections/10645/test-warehouse-connection/` switched it. |
+| Experiment 394 "Onboarding CTA copy" | **`created`** on 2026-11-23 06:24 UTC (approval #3). Feature 299210, metric 319 (`expected_direction: "increase"`), `experiment_rollout` enabled false at 0%, value `control`, option 36243 (`benefit_copy`) at 50. Read-back checks passed; a throwaway test visitor got `control` with no experiment marker. |
 
 ## Agents and models (from agent transcripts)
 
@@ -75,7 +75,10 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 
 ## Owner actions open
 
-1. **Flagsmith:** ask in the Flagsmith Discord why the Development warehouse is stuck in Pending Connection after receiving an event.
+1. ~~**Flagsmith:** ask in the Flagsmith Discord why the Development warehouse is stuck in Pending Connection after receiving an event.~~ **Not needed (2026-11-23).**
+   - In Flagsmith's public source (main at be2bd72; `api/experimentation/views.py:186-205`, `services.py:1245-1262`), a managed connection only moves from Pending Connection to Connected when the test-connection call runs and finds at least 1 event.
+   - The dashboard's Warehouse tab runs it when opened and every 60 s while open. Nothing runs it automatically.
+   - Flagsmith's docs say it switches "as soon as the first event arrives". That is a docs/code conflict.
 2. ~~**Netlify:** scope `VITE_FLAGSMITH_ENVIRONMENT_KEY` to the Production context and keep fork deploy previews on "require approval".~~ **Done 2026-11-22.**
    - `netlify.toml` sets the key to an empty string for `deploy-preview` and `branch-deploy`. Netlify documents that `netlify.toml` values override UI values, so only Production builds with the key.
    - The "Untrusted deploys policy" was already "Require approval".
@@ -84,10 +87,17 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 
 ## Blockers and risks
 
-1. **Warehouse:** until it connects, there is no experiment, no exposures and no real results. `/results` honestly shows "No experiment running yet."
-2. **Before the first real snapshot (Task 6),** harden selection so that an item matching the flag with an unknown status or `feature` shape throws instead of reading as "no experiment" (parked finding).
-3. **Results shape:** it is still unconfirmed. Task 7 will replace the raw bundled bodies with an allowlisted projection (security M3) and add the missing final-text test.
+1. **Before the first real snapshot (Task 6),** harden selection so that an item matching the flag with an unknown status or `feature` shape throws instead of reading as "no experiment" (parked finding).
+2. **Results shape:** it is still unconfirmed. Task 7 will replace the raw bundled bodies with an allowlisted projection (security M3) and add the missing final-text test.
+3. **No sample-ratio check:** Flagsmith will not report a sample-ratio-mismatch (SRM) check for this experiment, because it computes the expected shares from the flag's default split, which is 0% for `benefit_copy`. `/results` must say "not available" rather than imply the split is fine (Task 7).
+4. **Timing:** approvals #4 (start) and #5 (go live) run on or after 2026-11-26 08:00 IST (hacking start). The committed snapshot predates experiment 394, so `/results` shows "No experiment running yet." until the snapshot is refreshed.
 
 ## Next
 
-When the warehouse is Connected, Task 6 runs: approval #3, approval #4, a live check in a fresh browser profile, then the first real snapshot plus a spec amendment for the results shape. Task 7 follows: the results table and verdict. Then a final report update.
+Approval #4 (start), then approval #5 (go live), asked separately and run back-to-back on or after 2026-11-26 08:00 IST. Then a live check in a fresh browser profile, then the first real snapshot plus a spec amendment for the results shape. Task 7 follows: the results table and verdict, including the SRM "not available" note. Then a final report update.
+
+## Since the interim report
+
+- The `/experiment` preview was fixed to the staged order (create at 0%, start, go live): commit `3da6b37`, live on Netlify 2026-11-23 06:39 UTC.
+- Why staged: per Flagsmith's public source, Flagsmith applies `experiment_rollout` at create and only marks enrollment while the experiment is running, so the documented create body (enabled, 100%, 50%) would show the split to visitors before start with no exposures recorded. Start is expected to switch the override on, still at 0%. Go live is a separate `PATCH …/experiments/<id>/rollout/` (enabled true, 100%, value `control`, option 36243 at 50), and the docs allow changing the rollout percentage while running.
+- Gate for that commit: vitest 149/149, lint exit 0 (5 accepted warnings), typecheck 0, build ok, E2E 3/3. Opus security review approved.

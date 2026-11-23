@@ -25,6 +25,8 @@ In the Development environment:
 
 A new connection may stay Pending Connection while waiting for the first event; the first event can take a few hours to process. Each environment has one warehouse connection. Experiments cannot be created until a warehouse is in place.
 
+Tip: a Flagsmith-managed connection only moves from Pending Connection to Connected when its test-connection call runs and finds at least 1 event. Nothing runs it automatically. The dashboard's Warehouse tab runs it when opened and every 60 s while open. If events have arrived but the status is still pending, open the Warehouse tab, or, with owner approval, run `POST …/warehouse-connections/<id>/test-warehouse-connection/` once. Flagsmith's docs say it switches "as soon as the first event arrives"; the public source behaves as above.
+
 ## CLI
 
 ```powershell
@@ -61,16 +63,19 @@ Diagnostic event: `flagpilot_primary_cta_clicked`.
 2. Create the multivariate flag with keyed variants using documented CLI/API workflow.
 3. Verify variants and keys.
 4. Create metric with exact conversion event.
-5. Create experiment with hypothesis, metric and allocation.
+5. Create the experiment (approval #3) with hypothesis, metric and the rollout off: `enabled: false`, `rollout_percentage: 0`, value `control`, `benefit_copy` at 50. Verify status `created`.
 6. Review dry-run config.
-7. Obtain explicit approval before start.
-8. Start and verify status is running.
+7. Start (approval #4): `POST …/experiments/<id>/start/` with no body (do not use `--input -`). Verify status is running.
+8. Go live (approval #5): `PATCH …/experiments/<id>/rollout/` with `enabled: true`, `rollout_percentage: 100`, value `control`, `benefit_copy` at 50. Verify with a GET.
+   Run the live verification after go-live (#5), not after start.
 9. Integrate the React SDK using current official docs.
 10. Identify visitor with stable non-PII ID.
 11. Use `useExperiment` where the variant is rendered, or use documented manual exposure flow if evaluation and display occur separately.
 12. Track conversion only after genuine demo completion.
 13. Flush buffered events with documented SDK method.
 14. Verify event arrival and fetch results from Flagsmith.
+
+Why staged: per Flagsmith's public source, Flagsmith applies `experiment_rollout` at create, and only marks enrollment (`experiment.inExperiment`) while the experiment is running. The documented create body (enabled, 100%, 50%) would show the 50/50 split to visitors before start with no exposures recorded. Flagsmith docs differ here: they show that body at create. Start is expected to switch the override on, still at 0%. Go live is a separate rollout change; the docs allow changing the rollout percentage while running. Approvals #4 and #5 are asked separately.
 
 The official React docs show `useExperiment` records exposure when the component renders. The JavaScript client uses `getExperimentFlag` at the point of exposure; `flushEvents()` is documented for flushing buffered events.
 

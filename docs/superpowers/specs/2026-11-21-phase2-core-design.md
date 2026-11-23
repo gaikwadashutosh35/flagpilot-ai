@@ -264,3 +264,8 @@ Following `docs/MODEL_ROUTING.md`:
 - Copilot "unavailable" includes SDK error and not-yet-loaded, not only a missing key.
 - The status page shows the Flagsmith state (not configured / loading / loaded / error) instead of "events enabled".
 - The config preview shows one block per approval with the target, and no commands for an invalid plan.
+
+## Amendment (2026-11-23, staged experiment sequence)
+
+- The approval sequence in §5.6 and §6 (create at 50/50 as approval #3, then start as approval #4) is superseded. It is now #3 create with the rollout off at 0%, #4 start, #5 go live (`PATCH …/experiments/<id>/rollout/`: enabled true, 100%, `benefit_copy` 50%). Per Flagsmith's public source, Flagsmith applies `experiment_rollout` at create and only marks enrollment while running, so the documented create body would show the split before start with no exposures recorded.
+- The §3 warehouse note ("currently Pending Connection") is resolved: the warehouse switched to Connected on 2026-11-23 05:16 UTC, after one owner-approved test-connection call.

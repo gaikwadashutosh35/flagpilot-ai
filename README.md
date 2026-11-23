@@ -38,6 +38,12 @@ Written on 2026-11-22, before the experiment was started and before any results 
 - **Source of numbers:** every number comes from Flagsmith's results, shown on `/results` with the time it was captured. We never compute our own winner, and we never round a number into a claim.
 - **Our own traffic:** the team's own test sessions use fresh browser profiles and are disclosed. No synthetic traffic is sent.
 
+### Amendment (2026-11-23, before any data)
+
+- Experiment 394 was created on 2026-11-23, before hacking starts, with the rollout off at 0%, so no visitor has been enrolled or seen the treatment copy (everyone is served control), and no experiment data exists. Start and go-live happen on or after Nov 26, 08:00 IST.
+- "Start" in the measurement window means Flagsmith's `started_at` for experiment 394 (approval #4). Visitors only start seeing the split at go-live (approval #5), run minutes later. Both times will be added here when they happen.
+- Flagsmith does not report a sample-ratio check for this setup, because it computes the expected shares from the flag's default split, which is 0% for `benefit_copy`. `/results` will say so instead of implying the split is fine.
+
 ## Stack
 
 - React + Vite + TypeScript
