@@ -6,8 +6,8 @@ const json = (body: unknown) =>
   JSON.stringify(body).replace(/[^ -~]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
 
 // Quoted heredoc: the shell interprets nothing in the body. The JSON is single-line, so a bare JSON line cannot occur.
-const api = (path: string, body?: unknown) =>
-  `flagsmith api ${path} -X POST --input -${body ? ` <<'JSON'\n${json(body)}\nJSON` : ''}`
+const api = (path: string, body?: unknown, method = 'POST') =>
+  `flagsmith api ${path} -X ${method} --input -${body ? ` <<'JSON'\n${json(body)}\nJSON` : ''}`
 
 const sentence = (e: string) => e.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
@@ -19,17 +19,18 @@ export function configPreview(plan: ExperimentPlan) {
   const exp = 'api/v1/environments/<ENV_KEY>/experiments/'
 
   const metricBody = { name: metricName, aggregation: pm.aggregation, direction: pm.direction, definition: { version: 1, event: pm.event } }
+  const rollout = (live: boolean) => ({
+    enabled: live,
+    rollout_percentage: live ? 100 : 0,
+    feature_state_value: { type: 'string', value: 'control' },
+    multivariate_feature_state_values: [{ multivariate_feature_option: '<VARIANT_ID>', percentage_allocation: plan.allocation.treatment }],
+  })
   const experimentBody = {
     feature: '<FLAG_ID>',
     name: plan.title,
     hypothesis: plan.hypothesis,
     metrics: [{ metric: '<METRIC_ID>', expected_direction: 'increase' }],
-    experiment_rollout: {
-      enabled: true,
-      rollout_percentage: 100,
-      feature_state_value: { type: 'string', value: 'control' },
-      multivariate_feature_state_values: [{ multivariate_feature_option: '<VARIANT_ID>', percentage_allocation: plan.allocation.treatment }],
-    },
+    experiment_rollout: rollout(false),
   }
 
   return {
@@ -55,8 +56,12 @@ export function configPreview(plan: ExperimentPlan) {
             ],
           },
           { heading: 'Step 2 — approval #2, run separately', commands: [api('api/v1/environments/<ENV_KEY>/experiment-metrics/', metricBody)] },
-          { heading: 'Step 3 — approval #3, run separately', commands: [api(exp, experimentBody)] },
-          { heading: 'Step 4 — approval #4, run separately — only after step 3 succeeded', commands: [api(`${exp}<EXPERIMENT_ID>/start/`)] },
+          { heading: 'Step 3 — approval #3, run separately — rollout off (0%), no visitor sees a change', commands: [api(exp, experimentBody)] },
+          { heading: 'Step 4 — approval #4, run separately — only after step 3 succeeded — still 0%', commands: [api(`${exp}<EXPERIMENT_ID>/start/`)] },
+          {
+            heading: 'Step 5 — approval #5, run separately — only after step 4 succeeded — go live: visitors start seeing the split',
+            commands: [api(`${exp}<EXPERIMENT_ID>/rollout/`, rollout(true), 'PATCH')],
+          },
         ]
       : [],
   }

@@ -89,12 +89,12 @@ describe('ExperimentStatusPage', () => {
     expect(document.body.textContent).not.toMatch(/Events enabled|flush error/i)
   })
 
-  it('renders four approval blocks, the target and the shell note', () => {
+  it('renders five approval blocks, the target and the shell note', () => {
     renderPage()
     expect(screen.getByText('Target: project FlagPilot / environment Development')).toBeInTheDocument()
     expect(screen.getByText('bash / Git Bash only')).toBeInTheDocument()
-    expect(screen.getAllByRole('heading', { name: /^Step \d — approval #\d, run separately/ })).toHaveLength(4)
-    expect(document.querySelectorAll('pre')).toHaveLength(4)
+    expect(screen.getAllByRole('heading', { name: /^Step \d — approval #\d, run separately/ })).toHaveLength(5)
+    expect(document.querySelectorAll('pre')).toHaveLength(5)
   })
 
   it('without a key shows not configured and calls no SDK hooks', () => {

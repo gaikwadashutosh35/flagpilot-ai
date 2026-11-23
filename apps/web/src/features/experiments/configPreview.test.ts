@@ -35,16 +35,42 @@ describe('configPreview', () => {
     expect(steps.join('\n')).not.toContain("echo '")
   })
 
-  it('splits into four blocks, one approval each, with step 1 holding flag create and variant add', () => {
+  it('splits into five blocks, one approval each, with step 1 holding flag create and variant add', () => {
     const { blocks, valid } = configPreview(generatePlan({ question: FLAGSHIP_QUESTION }))
     expect(valid).toBe(true)
     expect(blocks.map((b) => b.heading)).toEqual([
       'Step 1 — approval #1, run separately',
       'Step 2 — approval #2, run separately',
-      'Step 3 — approval #3, run separately',
-      'Step 4 — approval #4, run separately — only after step 3 succeeded',
+      'Step 3 — approval #3, run separately — rollout off (0%), no visitor sees a change',
+      'Step 4 — approval #4, run separately — only after step 3 succeeded — still 0%',
+      'Step 5 — approval #5, run separately — only after step 4 succeeded — go live: visitors start seeing the split',
     ])
-    expect(blocks.map((b) => b.commands.length)).toEqual([2, 1, 1, 1])
+    expect(blocks.map((b) => b.commands.length)).toEqual([2, 1, 1, 1, 1])
+  })
+
+  const bodyOf = (cmd: string) => JSON.parse(cmd.split("<<'JSON'\n")[1].replace(/\nJSON$/, ''))
+  const rollout = (enabled: boolean, pct: number) => ({
+    enabled,
+    rollout_percentage: pct,
+    feature_state_value: { type: 'string', value: 'control' },
+    multivariate_feature_state_values: [{ multivariate_feature_option: '<VARIANT_ID>', percentage_allocation: 50 }],
+  })
+
+  it('step 3 creates the experiment with rollout off at 0%', () => {
+    const cmd = configPreview(generatePlan({ question: FLAGSHIP_QUESTION })).blocks[2].commands[0]
+    expect(bodyOf(cmd).experiment_rollout).toEqual(rollout(false, 0))
+  })
+
+  it('step 4 start command is a bodyless POST', () => {
+    const cmd = configPreview(generatePlan({ question: FLAGSHIP_QUESTION })).blocks[3].commands[0]
+    expect(cmd).toBe('flagsmith api api/v1/environments/<ENV_KEY>/experiments/<EXPERIMENT_ID>/start/ -X POST --input -')
+  })
+
+  it('step 5 goes live with a PATCH to the rollout endpoint', () => {
+    const cmd = configPreview(generatePlan({ question: FLAGSHIP_QUESTION })).blocks[4].commands[0]
+    expect(cmd.startsWith("flagsmith api api/v1/environments/<ENV_KEY>/experiments/<EXPERIMENT_ID>/rollout/ -X PATCH --input - <<'JSON'\n")).toBe(true)
+    expect(cmd.endsWith('\nJSON')).toBe(true)
+    expect(bodyOf(cmd)).toEqual(rollout(true, 100))
   })
 
   it('escapes non-ASCII (line separators, bidi overrides) in JSON bodies', () => {
