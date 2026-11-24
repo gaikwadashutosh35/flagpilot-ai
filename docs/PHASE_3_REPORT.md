@@ -83,7 +83,7 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
    - `netlify.toml` sets the key to an empty string for `deploy-preview` and `branch-deploy`. Netlify documents that `netlify.toml` values override UI values, so only Production builds with the key.
    - The "Untrusted deploys policy" was already "Require approval".
    - Production re-verified after the redeploy: "Client key present: yes", "Flagsmith: loaded", flags request 200.
-3. **`apps/web/vercel.json`:** this file is unused since the move to Netlify. Delete it with your OK.
+3. ~~**`apps/web/vercel.json`:** this file is unused since the move to Netlify. Delete it with your OK.~~ **Done 2026-11-24.** Removed in commit `13d0127`; `netlify.toml` has the SPA redirect.
 
 ## Blockers and risks
 

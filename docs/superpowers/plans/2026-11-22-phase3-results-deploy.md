@@ -201,7 +201,7 @@ Parked from the Phase 3 fix wave, do before the first real snapshot: harden expe
 
 ### Task 8: Security review, fixes, report, merge [security-reviewer → feature-implementer → main session]
 
-- [ ] `security-reviewer` (Opus) does a read-only review of `scripts/snapshot-*.mjs`, `snapshot.json`, `/results`, `vercel.json` and the deployed bundle. Focus on key handling, injection via `execFile` arguments, honesty of the displayed numbers, and redaction.
+- [ ] `security-reviewer` (Opus) does a read-only review of `scripts/snapshot-*.mjs`, `snapshot.json`, `/results`, `netlify.toml` and the deployed bundle. Focus on key handling, injection via `execFile` arguments, honesty of the displayed numbers, and redaction.
 - [ ] `feature-implementer` fixes each confirmed finding with a failing test first; then the full gate.
 - [ ] The main session writes `docs/PHASE_3_REPORT.md`, covering:
   - the deploy URL, the snapshot runs log, and the experiment ID/status;
