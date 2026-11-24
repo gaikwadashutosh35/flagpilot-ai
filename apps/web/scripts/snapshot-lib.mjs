@@ -2,6 +2,7 @@ const ORDER = ['running', 'paused', 'created', 'completed']
 
 export function selectExperiment(list, flagId) {
   const arr = Array.isArray(list) ? list : Array.isArray(list?.results) ? list.results : []
+  if (arr.some((e) => !(Number.isInteger(e?.feature) || Number.isInteger(e?.feature?.id)))) throw new Error('unexpected experiment feature')
   const mine = arr.filter((e) => (e?.feature?.id ?? e?.feature) === flagId)
   if (mine.some((e) => !ORDER.includes(e.status))) throw new Error('unexpected experiment status')
   mine.sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || b.id - a.id)

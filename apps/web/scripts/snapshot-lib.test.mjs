@@ -46,6 +46,26 @@ describe('snapshot-lib', () => {
     ).toBe(2)
     expect(selectExperiment([{ id: 1, feature: 9, status: 'archived' }], 299210)).toBeNull()
   })
+  it('throws on an unknown feature shape in the list', () => {
+    const msg = 'unexpected experiment feature'
+    const bad = [
+      [{ id: 7, feature: '299210', status: 'running' }],
+      [{ id: 7, feature: { pk: 299210 }, status: 'running' }],
+      [{ id: 7, feature: { id: '299210' }, status: 'running' }],
+      [{ id: 7, feature: null, status: 'running' }],
+      [{ id: 7, status: 'running' }],
+      [null],
+      [{ id: 3, feature: 299210, status: 'running' }, { id: 7, feature: '299210', status: 'running' }],
+      [{ id: 1, feature: { pk: 9 }, status: 'running' }],
+      { results: [{ id: 7, feature: '299210', status: 'running' }] },
+    ]
+    for (const list of bad) expect(() => selectExperiment(list, 299210)).toThrow(msg)
+  })
+  it('checks the feature shape before the status', () => {
+    expect(() => selectExperiment([{ id: 7, feature: '299210', status: 'archived' }], 299210)).toThrow(
+      'unexpected experiment feature',
+    )
+  })
   it('maps snake_case experiment fields', () => {
     expect(mapExperiment({ id: 7, name: 'n', status: 'running', started_at: 'a', ended_at: null, hypothesis: 'h' })).toEqual({
       id: 7, name: 'n', status: 'running', startedAt: 'a', endedAt: null,
@@ -105,6 +125,16 @@ describe('run', () => {
       args[0] === 'feature' ? '{"id":299210}' : '[{"id":7,"feature":299210,"status":"archived"}]',
     )
     await expect(run(d)).rejects.toThrow('unexpected experiment status')
+    expect(d.writeFile).not.toHaveBeenCalled()
+    expect(d.rename).not.toHaveBeenCalled()
+    expect(d.exec).toHaveBeenCalledTimes(2)
+  })
+  it('rejects and writes nothing when an experiment has an unknown feature shape', async () => {
+    const d = base()
+    d.exec = vi.fn(async (args) =>
+      args[0] === 'feature' ? '{"id":299210}' : '[{"id":7,"feature":"299210","status":"running"}]',
+    )
+    await expect(run(d)).rejects.toThrow('unexpected experiment feature')
     expect(d.writeFile).not.toHaveBeenCalled()
     expect(d.rename).not.toHaveBeenCalled()
     expect(d.exec).toHaveBeenCalledTimes(2)
