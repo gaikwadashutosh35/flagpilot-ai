@@ -31,6 +31,21 @@ describe('snapshot-lib', () => {
     expect(selectExperiment(mk('completed', 'created'), 5).status).toBe('created')
     expect(selectExperiment(mk('completed'), 5).status).toBe('completed')
   })
+  it('throws on an unknown status for the flag', () => {
+    const msg = 'unexpected experiment status'
+    expect(() => selectExperiment([{ id: 7, feature: 299210, status: 'archived' }], 299210)).toThrow(msg)
+    expect(() => selectExperiment([{ id: 7, feature: { id: 299210 }, status: 'archived' }], 299210)).toThrow(msg)
+    expect(() => selectExperiment([{ id: 7, feature: 299210 }], 299210)).toThrow(msg)
+    expect(() =>
+      selectExperiment([{ id: 3, feature: 299210, status: 'running' }, { id: 7, feature: 299210, status: 'archived' }], 299210),
+    ).toThrow(msg)
+  })
+  it('ignores unknown statuses on other flags', () => {
+    expect(
+      selectExperiment([{ id: 1, feature: 9, status: 'archived' }, { id: 2, feature: 299210, status: 'created' }], 299210).id,
+    ).toBe(2)
+    expect(selectExperiment([{ id: 1, feature: 9, status: 'archived' }], 299210)).toBeNull()
+  })
   it('maps snake_case experiment fields', () => {
     expect(mapExperiment({ id: 7, name: 'n', status: 'running', started_at: 'a', ended_at: null, hypothesis: 'h' })).toEqual({
       id: 7, name: 'n', status: 'running', startedAt: 'a', endedAt: null,
@@ -83,6 +98,16 @@ describe('run', () => {
     await expect(run(d)).rejects.toThrow()
     expect(d.writeFile).not.toHaveBeenCalled()
     expect(d.rename).not.toHaveBeenCalled()
+  })
+  it('rejects and writes nothing when the flag has an experiment with an unknown status', async () => {
+    const d = base()
+    d.exec = vi.fn(async (args) =>
+      args[0] === 'feature' ? '{"id":299210}' : '[{"id":7,"feature":299210,"status":"archived"}]',
+    )
+    await expect(run(d)).rejects.toThrow('unexpected experiment status')
+    expect(d.writeFile).not.toHaveBeenCalled()
+    expect(d.rename).not.toHaveBeenCalled()
+    expect(d.exec).toHaveBeenCalledTimes(2)
   })
   it('writes the all-null snapshot when there is no experiment', async () => {
     const d = base()
