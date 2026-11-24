@@ -88,6 +88,8 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 ## Blockers and risks
 
 1. **Before the first real snapshot (Task 6),** harden selection so that an item matching the flag with an unknown status or `feature` shape throws instead of reading as "no experiment" (parked finding).
+   - Unknown status: **done 2026-11-24** (commit `30cde3d`). The snapshot now fails with "unexpected experiment status" and writes nothing.
+   - Unknown `feature` shape: still open. An item whose `feature` is neither the flag ID nor an object with that ID is skipped, so it can still read as "no experiment".
 2. **Results shape:** it is still unconfirmed. Task 7 will replace the raw bundled bodies with an allowlisted projection (security M3) and add the missing final-text test.
 3. **No sample-ratio check:** Flagsmith will not report a sample-ratio-mismatch (SRM) check for this experiment, because it computes the expected shares from the flag's default split, which is 0% for `benefit_copy`. `/results` must say "not available" rather than imply the split is fine (Task 7).
 4. **Timing:** approvals #4 (start) and #5 (go live) run on or after 2026-11-26 08:00 IST (hacking start). The committed snapshot predates experiment 394, so `/results` shows "No experiment running yet." until the snapshot is refreshed.
