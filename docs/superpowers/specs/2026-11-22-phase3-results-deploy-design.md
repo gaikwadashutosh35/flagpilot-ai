@@ -235,3 +235,21 @@ First real snapshot: 2026-11-27T16:52:18Z, experiment 394 running (commit `50449
   - Else "Inconclusive".
 - **SRM:** `srm_p_value` null shows "SRM check not available from Flagsmith". A number shows the p-value, plus a warning below 0.001 (Flagsmith UI's cutoff).
 - **Allowlisted projection (security M3):** the script now stores only the fields above, not the raw bodies. `results` becomes `{ as_of, is_final, payload: null | { srm_p_value, metrics: [{ metric_id, variants: { k: { n, sum } }, inference: { k: null | { lift, ci_low, ci_high, chance_to_win } } }] } }` and `exposures` becomes `{ as_of, excluded_identities }`. Any other shape fails the snapshot and leaves the file untouched. `schemaVersion` stays 1.
+
+## Amendment (2026-11-28) — Task 8 security fixes
+From the Task 8 security review (Opus, approve with fixes; 0 critical/high). These supersede the earlier copy and rules where they differ.
+- **Compute time (M1):** `/results` also shows "Flagsmith computed these results at <results.as_of>" whenever `as_of` is present. The header keeps the snapshot capture time.
+- **Stricter allowlist (L1):** the projection keeps only metric 319 (a duplicate 319 fails). `variants` and `inference` may contain only `control` and `benefit_copy`. `n` and `sum` must be non-negative integers. `as_of` must be a strict ISO timestamp. The page applies the same rules, and anything else shows the placeholder.
+- **Finality (L2):** the `completed` badge is "Ended" (was "Ended — results final"). "Results final" or "Results not final yet" follows Flagsmith's `is_final`, not the experiment status.
+- **95% interval (L3):** the "95% interval" header stays. Source: Flagsmith's results UI labels `ci_low`/`ci_high` as "The range we are 95% confident the true lift falls within" (`frontend/web/components/experiments/results/ExperimentResultsScorecardTable.tsx`, main at `9f12873`).
+- **Display (L7, SRM):** chance to win shows one decimal (`97.0%`), so a "Leading" verdict never sits next to a rounded "95%" or "100%". An SRM p-value below 0.001 shows "<0.001".
+- **Empty CLI output (L6):** empty output for the experiment detail, exposures or results fails the snapshot instead of reading as "not computed yet".
+- **Build guard (L4):** a non-empty `VITE_FLAGSMITH_ENVIRONMENT_KEY` must match the client-key format exactly.
+- **Round 2 (same day):**
+  - Chance to win rounds toward 50% at one decimal.
+  - A value above 0.95 never displays at or below 95.0% (it shows ">95.0%"). Below 0.05 it never displays at or above 5.0% ("<5.0%").
+  - At 0.9995 or more it shows ">99.9%"; at 0.0005 or less, "<0.1%".
+  - `chance_to_win` must be within 0–1.
+  - A computed payload with no metric 319 fails the snapshot.
+  - A literal `null` body fails the snapshot.
+  - Experiment start and end dates use the strict ISO check.

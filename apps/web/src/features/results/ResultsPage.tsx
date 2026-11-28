@@ -8,7 +8,7 @@ const STATUS = { created: 'Created', running: 'Running', paused: 'Paused', compl
 const when = (v: string) => new Date(v).toLocaleString()
 const COLS = ['Variant', 'Identities', 'Conversions', 'Conversion rate', 'Lift vs control', '95% interval', 'Chance to win']
 
-function ResultsTable({ view, final }: { view: ResultsView; final: boolean }) {
+function ResultsTable({ view }: { view: ResultsView }) {
   const rows = (['control', 'benefit_copy'] as const).map((k) => {
     const a = view[k]
     const i = k === 'control' ? undefined : a.inference
@@ -17,9 +17,14 @@ function ResultsTable({ view, final }: { view: ResultsView; final: boolean }) {
   const srm = view.srmPValue
   return (
     <>
-      <div className="overflow-x-auto">
+      <div
+        role="region"
+        aria-labelledby="results-caption"
+        tabIndex={0}
+        className="overflow-x-auto rounded-lg outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
         <table className="w-full text-left text-sm">
-          <caption className="pb-2 text-left font-medium">Demo completed (metric 319)</caption>
+          <caption id="results-caption" className="pb-2 text-left font-medium">Demo completed (metric 319)</caption>
           <thead>
             <tr>
               {COLS.map((c) => (
@@ -47,9 +52,10 @@ function ResultsTable({ view, final }: { view: ResultsView; final: boolean }) {
       </div>
       <p className="font-medium">Verdict: {verdict(view)}</p>
       <p className="text-sm text-muted-foreground">Verdict per Flagsmith&apos;s documented thresholds</p>
-      <p className="text-sm">{srm === null ? 'SRM check not available from Flagsmith' : `SRM p-value: ${srm.toFixed(3)}`}</p>
+      <p className="text-sm">{srm === null ? 'SRM check not available from Flagsmith' : `SRM p-value: ${srm < 0.001 ? '<0.001' : srm.toFixed(3)}`}</p>
       {srm !== null && srm < 0.001 && <p className="text-sm">Warning: sample ratio mismatch (SRM p-value below 0.001)</p>}
-      {!view.isFinal && !final && <p className="text-sm text-muted-foreground">Results not final yet</p>}
+      <p className="text-sm text-muted-foreground">{view.isFinal ? 'Results final' : 'Results not final yet'}</p>
+      {view.asOf && <p className="text-sm text-muted-foreground">Flagsmith computed these results at {when(view.asOf)}</p>}
     </>
   )
 }
@@ -94,14 +100,14 @@ export function ResultsPage({ data = snapshotJson }: { data?: unknown }) {
             <>
               <p className="text-sm">Status: {STATUS[exp.status]}</p>
               {exp.status === 'paused' && <Badge>Paused</Badge>}
-              {exp.status === 'completed' && <Badge>Ended — results final</Badge>}
+              {exp.status === 'completed' && <Badge>Ended</Badge>}
               {exp.startedAt && <p className="text-sm">Started {when(exp.startedAt)}</p>}
               {read === 'pending' ? (
                 <p>Flagsmith hasn&apos;t computed results yet.</p>
               ) : read === null ? (
                 <p>Results captured from Flagsmith — detailed view coming once the format is confirmed.</p>
               ) : (
-                <ResultsTable view={read} final={exp.status === 'completed'} />
+                <ResultsTable view={read} />
               )}
             </>
           )}

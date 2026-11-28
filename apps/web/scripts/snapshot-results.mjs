@@ -75,9 +75,16 @@ export async function run({
   const json = async (name, args) => {
     const out = (await step(name, args)).trim()
     assertNoServerKey(out)
-    if (!out) return null
+    // Empty output means "no body" only for flag/list; for detail, exposures and results it is a failure.
+    if (!out) {
+      if (['detail', 'exposures', 'results'].includes(name)) throw new Error('invalid JSON from cli')
+      return null
+    }
     try {
-      return scan(JSON.parse(out), envKey)
+      const parsed = JSON.parse(out)
+      // A literal null is not a body for detail, exposures or results either.
+      if (parsed === null && ['detail', 'exposures', 'results'].includes(name)) throw new Error('invalid JSON from cli')
+      return scan(parsed, envKey)
     } catch (e) {
       throw e.message === 'server key detected' ? e : new Error('invalid JSON from cli')
     }

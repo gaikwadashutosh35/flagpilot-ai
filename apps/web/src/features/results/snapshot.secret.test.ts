@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
 
+const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/
+const JWT = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/
 const SERVER_KEY = /(^|[^A-Za-z0-9])ser\.[A-Za-z0-9]/
 
 function strings(v: unknown, out: string[] = []): string[] {
@@ -19,11 +21,13 @@ function strings(v: unknown, out: string[] = []): string[] {
 }
 
 const files = ['src/features/results/snapshot.json', 'src/features/results/__fixtures__/real-results.json']
-it.each(files)('%s contains no server key and not the client key', (file) => {
+it.each(files)('%s contains no server key, email, JWT or the client key', (file) => {
   const clientKey = JSON.parse(readFileSync(resolve(process.cwd(), '../../flagsmith.json'), 'utf8')).environment
   expect(typeof clientKey).toBe('string')
   const text = readFileSync(resolve(process.cwd(), file), 'utf8')
   const all = [text, ...strings(JSON.parse(text))]
   expect(all.some((s) => SERVER_KEY.test(s))).toBe(false)
   expect(all.some((s) => s.includes(clientKey))).toBe(false)
+  expect(all.some((s) => EMAIL.test(s))).toBe(false)
+  expect(all.some((s) => JWT.test(s))).toBe(false)
 })

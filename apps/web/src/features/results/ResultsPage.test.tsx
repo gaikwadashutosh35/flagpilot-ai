@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ResultsPage } from './ResultsPage'
@@ -41,7 +41,8 @@ describe('ResultsPage', () => {
 
   it('completed with results null', () => {
     show(snap('completed'))
-    expect(screen.getByText('Ended — results final')).toBeInTheDocument()
+    expect(screen.getByText('Ended')).toBeInTheDocument()
+    expect(screen.queryByText(/results final/i)).toBeNull()
     expect(screen.getByText("Flagsmith hasn't computed results yet.")).toBeInTheDocument()
   })
 
@@ -71,12 +72,17 @@ describe('ResultsPage', () => {
     expect(screen.getByRole('rowheader', { name: 'control' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'benefit_copy' })).toBeInTheDocument()
     const control = screen.getByRole('rowheader', { name: 'control' }).closest('tr')!
-    expect(control).toHaveTextContent('control—————')
+    const cells = within(control).getAllByRole('cell')
+    expect(cells).toHaveLength(6)
+    cells.forEach((c) => expect(c.textContent).toBe('—'))
     expect(screen.getByText('Verdict: Collecting data')).toBeInTheDocument()
     expect(screen.getByText("Verdict per Flagsmith's documented thresholds")).toBeInTheDocument()
     expect(screen.getByText('SRM check not available from Flagsmith')).toBeInTheDocument()
     expect(screen.getByText('Results not final yet')).toBeInTheDocument()
-    expect(container.querySelector('.overflow-x-auto table')).not.toBeNull()
+    expect(screen.getByText(/^Flagsmith computed these results at \S+/)).toBeInTheDocument()
+    const region = screen.getByRole('region', { name: 'Demo completed (metric 319)' })
+    expect(region).toHaveAttribute('tabindex', '0')
+    expect(region.querySelector('table')).not.toBeNull()
     expect(container.textContent).not.toMatch(/[{}]/)
   })
 
@@ -84,8 +90,43 @@ describe('ResultsPage', () => {
     const r = structuredClone(committed.results) as { payload: { srm_p_value: number | null } }
     r.payload.srm_p_value = 0.0004
     show(snap('running', r))
-    expect(screen.getByText('SRM p-value: 0.000')).toBeInTheDocument()
+    expect(screen.getByText('SRM p-value: <0.001')).toBeInTheDocument()
     expect(screen.getByText('Warning: sample ratio mismatch (SRM p-value below 0.001)')).toBeInTheDocument()
+  })
+
+  it('shows a plain SRM p-value at or above 0.001', () => {
+    const r = structuredClone(committed.results) as { payload: { srm_p_value: number | null } }
+    r.payload.srm_p_value = 0.0123
+    show(snap('running', r))
+    expect(screen.getByText('SRM p-value: 0.012')).toBeInTheDocument()
+    expect(screen.queryByText(/Warning: sample ratio/)).toBeNull()
+  })
+
+  it('completed with results not final shows Ended and not final', () => {
+    show(snap('completed', committed.results))
+    expect(screen.getByText('Ended')).toBeInTheDocument()
+    expect(screen.getByText('Results not final yet')).toBeInTheDocument()
+    expect(screen.queryByText('Results final')).toBeNull()
+  })
+
+  it('shows Results final when Flagsmith says so, whatever the status', () => {
+    show(snap('running', { ...committed.results, is_final: true }))
+    expect(screen.getByText('Results final')).toBeInTheDocument()
+    expect(screen.queryByText('Results not final yet')).toBeNull()
+  })
+
+  it('hides the compute time when Flagsmith gave none', () => {
+    show(snap('running', { ...committed.results, as_of: null }))
+    expect(screen.queryByText(/computed these results/)).toBeNull()
+  })
+
+  it('renders a numeric control arm', () => {
+    const r = structuredClone(committed.results) as { payload: { metrics: { variants: Record<string, unknown> }[] } }
+    r.payload.metrics[0].variants.control = { n: 120, sum: 36 }
+    show(snap('running', r))
+    const row = screen.getByRole('rowheader', { name: 'control' }).closest('tr')!
+    const cells = within(row).getAllByRole('cell')
+    expect(cells.slice(0, 3).map((c) => c.textContent)).toEqual(['120', '36', '30.0%'])
   })
 
   it('invalid snapshot', () => {

@@ -18,5 +18,9 @@ test('results page shows the committed snapshot state', async ({ page }) => {
   await expect(page.getByText(/^From Flagsmith/)).toBeVisible()
   await expect(page.getByText('Snapshot unreadable')).toHaveCount(0)
   await noHScroll(page)
+  // The table scrolls sideways at 375 px; its wrapper must be reachable by keyboard.
+  await tabTo(page, 'Demo completed (metric 319)')
+  await expect(page.getByRole('region', { name: 'Demo completed (metric 319)' })).toBeFocused()
+  await noHScroll(page)
   expect(hits).toEqual([])
 })

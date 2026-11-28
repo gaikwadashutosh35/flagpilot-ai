@@ -16,7 +16,8 @@ export type LoadedSnapshot = { ok: true; snapshot: Snapshot } | { ok: false }
 
 const STATUSES = ['created', 'running', 'paused', 'completed']
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const isDate = (v: unknown) => typeof v === 'string' && !Number.isNaN(Date.parse(v))
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+const isDate = (v: unknown) => typeof v === 'string' && ISO.test(v) && !Number.isNaN(Date.parse(v))
 const nullableDate = (v: unknown) => v === null || isDate(v)
 
 export function loadSnapshot(raw: unknown): LoadedSnapshot {
