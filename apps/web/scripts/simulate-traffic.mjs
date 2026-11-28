@@ -4,6 +4,8 @@
 // Rates: control converts 0.30, benefit_copy 0.45; half of the non-converters click the CTA and leave.
 // Visitor IDs start with fp_5eed5eed so simulated visitors are recognisable. Math.random only drives
 // visitor behaviour and IDs, never the variant: that always comes from Flagsmith.
+// Live mode waits for Flagsmith's 202 reply to each event POST (and for in-flight event POSTs to
+// finish) before closing a visitor's browser, so no event is aborted by the close.
 // ALWAYS try --dry-run --url http://localhost:5180 first; live runs need separate owner approval.
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
@@ -61,28 +63,56 @@ const isFlagsmith = (u) => {
 const ctaButton = (page) =>
   page.getByRole('button', { name: new RegExp(`^(${Object.values(COPY).join('|')})$`) }).first()
 
-// Waits for an events POST whose body contains `needle`. Started before the triggering action.
-const eventSeen = (page, needle) => {
-  const p = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes(EVENTS) && (r.postData() ?? '').includes(needle), {
-    timeout: 20000,
-  })
-  p.catch(() => {})
-  return p
+// A reply counts as accepted only for 202 and, if the body is JSON with a `rejected` array, an empty one.
+export function isAccepted(status, bodyText) {
+  if (status !== 202) return false
+  try {
+    const rejected = JSON.parse(bodyText)?.rejected
+    return !(Array.isArray(rejected) && rejected.length > 0)
+  } catch {
+    return true
+  }
 }
 
-async function completeDemo(page, live) {
+// Statuses the Flagsmith SDK retries (after a 1-2 s backoff), so the first such reply is not final.
+export const isTransient = (status) => status === 408 || status === 429 || status >= 500
+
+// Resolves true once Flagsmith accepts an events POST whose body contains `needle`, false on timeout or
+// a final rejection. Transient replies are skipped so the SDK's retry can still satisfy the waiter.
+// Started before the triggering action. accepted counts distinct POSTs (one POST may carry several events).
+const eventSeen = (page, needle, stats, timeout = 20000) =>
+  page
+    .waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        r.url().includes(EVENTS) &&
+        (r.request().postData() ?? '').includes(needle) &&
+        !isTransient(r.status()),
+      { timeout },
+    )
+    .then(async (r) => {
+      const ok = isAccepted(r.status(), await r.text().catch(() => ''))
+      if (ok && !stats.seen.has(r.request())) {
+        stats.seen.add(r.request())
+        stats.accepted++
+      }
+      return ok
+    })
+    .catch(() => false)
+
+async function completeDemo(page, live, stats) {
   await page.getByRole('button', { name: 'Does benefit-oriented CTA copy increase demo completion?' }).click()
   await page.getByRole('textbox', { name: 'What counts as success?' }).fill('More visitors finish the demo')
   await page.getByRole('button', { name: 'Next' }).click()
   await page.getByRole('button', { name: 'Next' }).click()
   await page.getByRole('checkbox', { name: 'I reviewed this plan' }).check()
-  const done = live ? eventSeen(page, 'flagpilot_demo_completed') : null
+  const done = live ? eventSeen(page, 'flagpilot_demo_completed', stats) : null
   await page.getByRole('button', { name: 'Approve plan' }).click()
   await page.getByRole('heading', { name: 'Plan approved' }).waitFor()
-  if (done) await done
+  return done ? await done : true
 }
 
-export async function runVisitor(browser, { url, dryRun, index }, stats = { blocked: 0 }) {
+export async function runVisitor(browser, { url, dryRun, index }, stats = { blocked: 0, accepted: 0, seen: new WeakSet() }) {
   const live = !dryRun
   const context = await browser.newContext()
   try {
@@ -98,11 +128,17 @@ export async function runVisitor(browser, { url, dryRun, index }, stats = { bloc
       })
     }
     const page = await context.newPage()
+    const pending = new Set()
+    page.on('request', (r) => r.url().includes(EVENTS) && pending.add(r))
+    page.on('requestfinished', (r) => pending.delete(r))
+    page.on('requestfailed', (r) => pending.delete(r))
+    const run = async () => {
     const identities = live
       ? page.waitForResponse((r) => r.url().includes('/api/v1/identities/'), { timeout: 15000 })
       : null
     identities?.catch(() => {})
-    const exposure = live ? eventSeen(page, '$flag_exposure') : null
+    // 35 s: the timer starts before goto and the SDK buffers the exposure until its 10 s flush.
+    const exposure = live ? eventSeen(page, '$flag_exposure', stats, 35000) : null
 
     await page.goto(url)
     const cta = ctaButton(page)
@@ -117,23 +153,29 @@ export async function runVisitor(browser, { url, dryRun, index }, stats = { bloc
       const exp = flag?.metadata?.experiment
       if (!(exp?.in_experiment === true && exp?.id === EXPERIMENT_ID)) return { outcome: 'not_in_experiment' }
       if (variant !== flag.feature_state_value) return { outcome: 'mismatch' }
-      try {
-        await exposure
-      } catch {
-        return { outcome: 'no_exposure' }
-      }
+      if (!(await exposure)) return { outcome: 'no_exposure' }
     }
 
     const action = dryRun ? ['convert', 'click', 'leave'][index % 3] : decide(variant, Math.random(), Math.random())
     if (action === 'leave') return { variant, action }
-    const clicked = live ? eventSeen(page, 'flagpilot_primary_cta_clicked') : null
+    const clicked = live ? eventSeen(page, 'flagpilot_primary_cta_clicked', stats) : null
     await cta.click()
     if (action === 'click') {
-      if (clicked) await clicked
+      if (clicked && !(await clicked)) return { outcome: 'event_failed' }
       return { variant, action }
     }
-    await completeDemo(page, live)
+    const completed = await completeDemo(page, live, stats)
+    if (clicked && !(await clicked)) return { outcome: 'event_failed' }
+    if (!completed) return { outcome: 'event_failed' }
     return { variant, action }
+    }
+    const r = await run().catch(() => ({ outcome: 'error' }))
+    if (live) {
+      // Never close the context while an event POST is still in flight (up to 10 s).
+      for (let t = 0; pending.size && t < 10000; t += 100) await page.waitForTimeout(100)
+      if (pending.size && !r.outcome) return { outcome: 'event_failed' }
+    }
+    return r
   } catch {
     return { outcome: 'error' }
   } finally {
@@ -145,9 +187,9 @@ export async function main(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv)
   const { chromium } = await import('@playwright/test')
   const browser = await chromium.launch()
-  const stats = { blocked: 0 }
+  const stats = { blocked: 0, accepted: 0, seen: new WeakSet() }
   const byVariant = { control: { convert: 0, click: 0, leave: 0 }, benefit_copy: { convert: 0, click: 0, leave: 0 } }
-  const outcomes = { not_in_experiment: 0, mismatch: 0, no_exposure: 0, error: 0 }
+  const outcomes = { not_in_experiment: 0, mismatch: 0, no_exposure: 0, event_failed: 0, error: 0 }
   let next = 0
   let streak = 0
   let aborted = false
@@ -174,6 +216,7 @@ export async function main(argv = process.argv.slice(2)) {
     visitors,
     byVariant,
     outcomes,
+    ...(opts.dryRun ? {} : { eventRepliesAccepted: stats.accepted }),
     ...(opts.dryRun ? { blockedFlagsmithRequests: stats.blocked } : {}),
   }
   console.log(JSON.stringify(summary))

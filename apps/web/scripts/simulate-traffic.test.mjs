@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { CLICK_ONLY, RATES, decide, parseArgs, simId, variantFromCta } from './simulate-traffic.mjs'
+import { CLICK_ONLY, RATES, decide, isAccepted, isTransient, parseArgs, simId, variantFromCta } from './simulate-traffic.mjs'
+
+describe('isAccepted', () => {
+  it('accepts 202 with a non-JSON, empty or clean body', () => {
+    expect(isAccepted(202, 'Accepted')).toBe(true)
+    expect(isAccepted(202, '')).toBe(true)
+    expect(isAccepted(202, '{"rejected":[]}')).toBe(true)
+    expect(isAccepted(202, '{"other":1}')).toBe(true)
+  })
+  it('rejects 202 with rejected events', () => {
+    expect(isAccepted(202, '{"rejected":[{"reason":"x"}]}')).toBe(false)
+  })
+  it('rejects other statuses', () => {
+    expect(isAccepted(400, '')).toBe(false)
+    expect(isAccepted(500, '{"rejected":[]}')).toBe(false)
+    expect(isAccepted(200, '')).toBe(false)
+  })
+})
+
+describe('isTransient', () => {
+  it('flags statuses the SDK retries', () => {
+    for (const s of [408, 429, 500, 502, 503, 504]) expect(isTransient(s)).toBe(true)
+  })
+  it('does not flag final statuses', () => {
+    for (const s of [200, 202, 400, 401, 403, 404]) expect(isTransient(s)).toBe(false)
+  })
+})
 
 describe('constants', () => {
   it('has the approved rates', () => {
