@@ -44,6 +44,39 @@ Written on 2026-11-22, before the experiment was started and before any results 
 - "Start" in the measurement window means Flagsmith's `started_at` for experiment 394 (approval #4). Visitors only start seeing the split at go-live (approval #5), run minutes later. Both times will be added here when they happen.
 - Flagsmith does not report a sample-ratio check for this setup, because it computes the expected shares from the flag's default split, which is 0% for `benefit_copy`. `/results` will say so instead of implying the split is fine.
 
+### Amendment (2026-11-28, before any simulated traffic)
+
+- **Times.** Experiment 394 started at 2026-11-27 12:29:50 UTC (Flagsmith's `started_at`, approval #4). It went live, meaning a 100% rollout split 50/50, at about 12:42 UTC the same day (approval #5).
+- **Real traffic so far.** By 2026-11-27 16:52 UTC Flagsmith had recorded **1 visitor**: the team's own live check in a fresh browser profile (`benefit_copy`, converted). That is far below the 50-per-version minimum.
+- **Change: simulated traffic.** The hackathon's Track 01 rules allow simulated traffic. We replace "No synthetic traffic is sent" with a disclosed simulation:
+  - About 200 simulated visitors, each in a fresh headless browser, go through the **deployed app**. Flagsmith assigns each one a variant and records the exposure. The click and conversion events are the same ones a real visitor sends.
+  - The script chooses only what a visitor does after seeing the button: **control converts 30% of the time and `benefit_copy` 45%**. Half of the visitors who don't convert click the button and then leave.
+  - Simulated visitor IDs start with `fp_5eed5eed-`. The script is [`apps/web/scripts/simulate-traffic.mjs`](apps/web/scripts/simulate-traffic.mjs).
+- **What the result means.** Flagsmith can't separate simulated visitors from real ones, so the result is dominated by the simulation. It shows whether Flagsmith detects a **planted** 15-point lift through our real pipeline. **It is not evidence about which copy real users prefer.** The decision rule above (minimum sample, above 95% to call a leader, otherwise inconclusive) is unchanged and is applied to Flagsmith's numbers as they come back.
+
+## How FlagPilot uses Flagsmith
+
+Flagsmith decides which copy each visitor sees, records who saw it and who converted, and computes the result. FlagPilot never assigns variants itself and never computes its own winner.
+
+| Part of Flagsmith | How FlagPilot uses it |
+|---|---|
+| **Feature flag** (multivariate) | `flagpilot_onboarding_cta` holds both CTA versions as keyed variations: `control` and `benefit_copy`. |
+| **JavaScript/React SDK** `@flagsmith/flagsmith` 12.5.0 | Remote evaluation for an identified visitor ([`FlagsmithRoot.tsx`](apps/web/src/lib/flagsmith/FlagsmithRoot.tsx)). The identity is a random anonymous ID (`fp_<uuid>`) stored in the browser. It contains no personal data, and the same ID is used for evaluation, exposure and conversion ([`identity.ts`](apps/web/src/lib/identity.ts)). |
+| **Exposure** | Recorded by the SDK's `useExperiment` hook, and only where the button is actually rendered ([`CtaExposure.tsx`](apps/web/src/features/playground/CtaExposure.tsx)). The SDK sends a `$flag_exposure` event tagged with experiment 394. If Flagsmith hasn't loaded within 3 s, the visitor sees the control copy and **no exposure is recorded**. |
+| **Events** | `flagpilot_primary_cta_clicked` (diagnostic) on click. `flagpilot_demo_completed` (the metric) only when the visitor approves a plan at the end of the demo, and only if they were exposed, at most once per visitor. Events are flushed with the SDK's `flushEvents()` ([`events.ts`](apps/web/src/lib/flagsmith/events.ts)). |
+| **Experimentation** | Experiment 394, "Onboarding CTA copy": metric 319 "Demo completed" (`expected_direction: increase`), a 50/50 split, and Flagsmith's managed warehouse. |
+| **Flagsmith CLI and API** | Every privileged step ran from the CLI (`flagsmith api …`), each after its own human approval, in stages: create with the rollout off at 0%, then start, then go live at 100%. A snapshot script ([`snapshot-results.mjs`](apps/web/scripts/snapshot-results.mjs)) fetches Flagsmith's results and stores only an allowlist of fields in a committed file. It rejects server keys and redacts the client key. |
+| **Flagsmith Cloud** | Hosted Flagsmith, with the Development environment's client key as the only key in the browser bundle. |
+
+**Results page.** [`/results`](https://flagpilot-ai.netlify.app/results) shows Flagsmith's own numbers from the latest snapshot, with the time it was captured.
+- The table has identities, conversions, conversion rate, lift vs control, 95% interval and chance to win.
+- The verdict follows Flagsmith's documented thresholds: "Collecting data" until each version has at least 50 identities and 5 conversions; "Leading: …" only above a 95% chance to win; otherwise "Inconclusive". The verdict is labelled with its source.
+- Flagsmith reports no sample-ratio check for this setup, so the page says "SRM check not available from Flagsmith".
+
+**Live verification (2026-11-27).** A fresh browser on the deployed site checked the whole path:
+- Flagsmith's response marked the visitor as in experiment 394 with variant `benefit_copy`, and the button showed "Launch an experiment in minutes".
+- Three event POSTs were accepted (HTTP 202), all with the same visitor ID: `$flag_exposure` on render, the click, and `flagpilot_demo_completed` only after "Approve plan".
+
 ## Stack
 
 - React + Vite + TypeScript
