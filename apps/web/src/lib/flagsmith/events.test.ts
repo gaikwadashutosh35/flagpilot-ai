@@ -69,4 +69,27 @@ describe('events', () => {
     trackCtaClick(false)
     expect(flagsmith.trackEvent).toHaveBeenCalledOnce()
   })
+
+  it('trackCtaClick flushes after tracking when available', async () => {
+    const { flagsmith, trackCtaClick } = await load()
+    trackCtaClick(true)
+    expect(flagsmith.flushEvents).toHaveBeenCalledOnce()
+    expect(vi.mocked(flagsmith.trackEvent).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(flagsmith.flushEvents).mock.invocationCallOrder[0],
+    )
+  })
+
+  it('trackCtaClick does nothing when unavailable', async () => {
+    const { flagsmith, trackCtaClick } = await load()
+    trackCtaClick(false)
+    expect(flagsmith.trackEvent).not.toHaveBeenCalled()
+    expect(flagsmith.flushEvents).not.toHaveBeenCalled()
+  })
+
+  it('a rejected flush does not throw', async () => {
+    const { flagsmith, trackCtaClick } = await load()
+    vi.mocked(flagsmith.flushEvents).mockRejectedValueOnce(new Error('boom'))
+    expect(() => trackCtaClick(true)).not.toThrow()
+    await Promise.resolve()
+  })
 })

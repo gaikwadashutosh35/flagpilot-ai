@@ -16,7 +16,7 @@ vi.mock('@flagsmith/flagsmith/react', () => ({
   FlagsmithProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 vi.mock('@flagsmith/flagsmith', () => ({
-  default: { trackEvent: m.trackEvent, flushEvents: vi.fn() },
+  default: { trackEvent: m.trackEvent, flushEvents: vi.fn(async () => {}) },
 }))
 
 import { FlagsmithAvailableContext } from '@/lib/flagsmith/FlagsmithRoot'
