@@ -1,32 +1,40 @@
-# React + TypeScript + Vite
+# FlagPilot web app
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The FlagPilot web app: React + Vite + TypeScript, using the Flagsmith React SDK (`@flagsmith/flagsmith`).
 
-Currently, two official plugins are available:
+## Routes
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Defined in `src/app/App.tsx`.
 
-## React Compiler
+- `/` — landing page with the experiment CTA and the demo (`src/features/playground`)
+- `/copilot` — experiment plan intake and editor (`src/features/copilot`)
+- `/experiment` — experiment status (`src/features/experiments`)
+- `/results` — results from a saved snapshot (`src/features/results`)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Scripts
 
-## Expanding the Oxlint configuration
+Run from this folder (`apps/web`).
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+- `npm run dev` — start the Vite dev server
+- `npm run build` — type-check (`tsc -b`) and build for production
+- `npm run lint` — run oxlint
+- `npm run preview` — serve the production build locally
+- `npm test` — run unit tests with Vitest
+- `npm run test:e2e` — run Playwright browser tests (`e2e/`)
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+## Where code lives
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+- `src/features/*` — one folder per screen: `copilot`, `experiments`, `playground`, `results`
+- `src/lib/flagsmith/` — Flagsmith setup, env key check and event helpers
+- `src/lib/identity.ts` — the stable anonymous visitor ID
+- `scripts/` — Node scripts for the project owner (`simulate-traffic.mjs`, `snapshot-results.mjs`) and their tests
+
+## Environment
+
+One variable, set in `.env.local` (see `.env.example`):
+
+- `VITE_FLAGSMITH_ENVIRONMENT_KEY` — the Flagsmith client environment key. Never put a server key (`ser.*`) or any other secret here.
+
+## Full setup
+
+See the "Setup" section in the root [README.md](../../README.md), including its Windows note under "Run the tests".

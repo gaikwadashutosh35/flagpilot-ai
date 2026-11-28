@@ -1,5 +1,17 @@
 # Folder Structure
 
+## As built (2026-11-28)
+
+The tree below is the plan. These points differ from the repo.
+
+- There is no `apps/api`, and no `tests/` folder. Both a root `.env.example` and `apps/web/.env.example` exist. The web app reads `apps/web/.env.local`.
+- Tests sit next to the code (`*.test.ts`, `*.test.tsx`) and in `apps/web/e2e/` (Playwright).
+- `apps/web/src/hooks`, `types`, `styles` and `lib/api` do not exist. Styles are in `src/index.css`.
+- `apps/web/src/lib` has `flagsmith/`, `identity.ts`, `storage.ts` and `utils.ts`.
+- `apps/web/scripts/` holds `simulate-traffic.mjs`, `snapshot-results.mjs`, `snapshot-lib.mjs` and their tests.
+- The root `scripts/` folder holds `phase1-scaffold.ps1` and `verify-environment.ps1`.
+- The repo root also has `netlify.toml` and `flagsmith.json`.
+
 ```text
 flagpilot-ai/
 ├── CLAUDE.md                         # Persistent Claude Code project rules

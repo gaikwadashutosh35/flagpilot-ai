@@ -1,5 +1,16 @@
 # Technical Architecture
 
+## As built (2026-11-28)
+
+The text below is the plan. These points differ from the repo.
+
+- No `apps/api` exists. The app is frontend only, so there is no Express API.
+- No LLM is used. The plan in `features/copilot` comes from a fixed template (`apps/web/src/features/copilot/plan.ts`).
+- Results do not come from a live call. `scripts/snapshot-results.mjs` runs the Flagsmith CLI and saves `src/features/results/snapshot.json`. `/results` reads that file (`ResultsPage.tsx`, `loadSnapshot.ts`).
+- The app does not change Flagsmith. Experiment setup is done by the project owner outside the app; `/experiment` shows status and a config preview (`configPreview.ts`).
+- Simulated traffic (disclosed in the README) comes from `scripts/simulate-traffic.mjs`, which drives headless browsers through the deployed app.
+- It is deployed with Netlify, configured in the root `netlify.toml`.
+
 ## Initial architecture
 
 ```mermaid
