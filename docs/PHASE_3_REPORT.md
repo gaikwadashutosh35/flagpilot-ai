@@ -41,7 +41,8 @@ Spec: `docs/superpowers/specs/2026-11-22-phase3-results-deploy-design.md` (amend
 | 2026-11-28 12:23:47–12:25:12 | **Approval #7a:** probe, 10 simulated visitors, 2 at a time. `control` 3 (2 converted, 0 clicked, 1 left), `benefit_copy` 7 (2, 3, 2). 0 failures; Flagsmith accepted 17 event requests. | Script summary |
 | 2026-11-28 12:32:30 | Snapshot after the probe (`as_of` 12:31:23): `control` 59 / 13, `benefit_copy` 93 / 29. That is exactly +3 / +2 and +7 / +2: every probe visitor and conversion was counted, including the visitors who left. | Script output (not committed) |
 | 2026-11-28 12:32:45–12:52:21 | **Approval #7b:** 300 simulated visitors, 4 at a time. `control` 143 (37 converted, 65 clicked, 41 left), `benefit_copy` 157 (68, 41, 48). 0 failures; Flagsmith accepted 511 event requests. | Script summary |
-| 2026-11-28 12:59:38 | Final snapshot (`as_of` 12:58:36, not final): `control` 202 / 50 (24.8%), `benefit_copy` 250 / 97 (38.8%). Exactly +143 / +37 and +157 / +68: every #7b visitor and conversion was counted. Lift +56.8%, interval [+11.7%, +101.8%], chance to win 99.3%, SRM null. **Verdict: Leading: benefit_copy.** | This commit |
+| 2026-11-28 12:59:38 | Final snapshot (`as_of` 12:58:36, not final): `control` 202 / 50 (24.8%), `benefit_copy` 250 / 97 (38.8%). Exactly +143 / +37 and +157 / +68: every #7b visitor and conversion was counted. Lift +56.8%, interval [+11.7%, +101.8%], chance to win 99.3%, SRM null. **Verdict: Leading: benefit_copy.** | `839f661` |
+| 2026-11-28 13:37:33 | Exposure-flush fix live: the app sends the exposure and the click right away instead of in the SDK's 10-second batch. A fresh visit (no click) sent `$flag_exposure` (experiment 394, `benefit_copy`) 2.5 s after the page started loading; reply `{"accepted":1,"rejected":[]}`, 0 console errors. That visit adds 1 non-converting `benefit_copy` identity after the final snapshot. | `29dba33`, browser network log |
 
 **Why the rollout was staged** (create at 0%, then start, then go live):
 - Per Flagsmith's public source, Flagsmith applies `experiment_rollout` when the experiment is created, but only marks enrollment while it is running.
@@ -144,6 +145,7 @@ Track 01 allows simulated traffic. Real traffic had reached 1 visitor (our own l
   - no horizontal scroll at 375 px, and a keyboard-focusable table region.
 - **Bundle:** 0 matches for a server key in the built JS.
 - **Dependabot alert 1** (minimatch, dev dependency) was fixed by an npm override (`7d0766e`).
+- **At `29dba33`** (exposure-flush fix): `npx vitest run` **262 tests** in 20 files, lint exit 0 (same 5 warnings), build passes, `npm run test:e2e` 3 passed.
 - **With the final snapshot (12:59:38):** `npx vitest run` 253 tests passed.
 - **At `4cf6063`** (simulation fix, a script outside the app bundle): `npx vitest run` **253 tests** passed, lint exit 0 (same 5 warnings), build passes. E2E was not re-run, because no app code changed. Dry run: 6 visitors, 0 errors, 0 Flagsmith requests.
 
@@ -181,6 +183,7 @@ Track 01 allows simulated traffic. Real traffic had reached 1 visitor (our own l
   - **Round 2** closed 5 residual gaps, reviewed by Opus (security) and Sonnet (adversarial tests): literal `null` output, script/page parity with no metric 319, rounding near 95% and 100%, strict start/end dates, and escaped-key redaction.
   - **Final fixes:** the coordinator fixed the last two items test-first. The escaped-key test wasn't escaping the key, and `chance_to_win` gained a 0–1 range check.
 - **Simulation fix (`4cf6063`):** the implementer wrote the tests first (3 failed before the fix). A semantics review and an adversarial review (both Sonnet) raised 4 findings, all accepted in one fix round, including that the click must be awaited on the convert path. The coordinator read the final diff before the probe.
+- **Exposure-flush fix (`29dba33`):** the SDK (12.5.0) buffers events for up to 10 s and has no page-close handling, and the app flushed only the conversion, so a real visitor leaving within ~10 s was not counted. Now `flushEvents()` runs after the exposure and the click. Test-first (3 of 13 new tests failed before the fix). Semantics review (Sonnet) approved; adversarial test review (Sonnet) found 2 important test gaps (late `inExperiment`, order proven only against a mock), fixed with mutation-checked tests, including one using the SDK's real `useExperiment`; re-review approved. Parked minors: no test proves the `.catch`, no component-level click-flush test, a mid-visit variant change would not be re-flushed (cannot happen here: the CTA mounts once after load and flags are not refreshed).
 - **Doc fixes (2026-11-28):** `apps/web/README.md` replaced (it was the Vite template), the README Documentation list extended, and "As built" sections added to `ARCHITECTURE.md` and `FOLDER_STRUCTURE.md`. An accuracy check found 1 false claim (no root `.env.example`; one exists), which was fixed.
 
 ## Agents and models
@@ -195,8 +198,8 @@ Track 01 allows simulated traffic. Real traffic had reached 1 visitor (our own l
 | Implementers: Task 7, simulation script, Task 8 rounds 1 and 2 | `feature-implementer` | claude-sonnet-5-5 | set in dispatch/workflow |
 | Task 7 review; Task 8 spec, adversarial and re-reviews | `general-purpose` | claude-sonnet-5-5 | set in dispatch/workflow |
 | Task 8 security review and re-reviews | `security-reviewer` | claude-opus-5-5 | set in dispatch/workflow |
-| Implementer and fix round: simulation fix; doc fixes | `feature-implementer` | claude-sonnet-5-5 | set in workflow |
-| Simulation fix reviews (semantics, adversarial) | `general-purpose` | claude-sonnet-5-5 | set in workflow |
+| Implementer and fix round: simulation fix; doc fixes; exposure-flush fix | `feature-implementer` | claude-sonnet-5-5 | set in workflow |
+| Simulation fix and exposure-flush fix reviews (semantics, adversarial, re-review) | `general-purpose` | claude-sonnet-5-5 | set in workflow |
 | Doc-fix checks (accuracy, scope); report checks (accuracy, consistency) | workflow subagent | claude-sonnet-5-5 | set in workflow |
 | Coordination, every Flagsmith CLI call and approval, Chrome steps (GitHub app grant, Netlify import), live checks, simulation runs, final fixes, reports | main session | claude-opus-5-5 | session model |
 
