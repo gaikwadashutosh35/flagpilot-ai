@@ -220,3 +220,18 @@ List and detail responses return `feature` as an object with `id`; the script ac
 - **Staged sequence.** "Approval #3, then approval #4" (§2 goals and §6 build order) is superseded by: #3 create, with `experiment_rollout` off at 0% (done: experiment 394, 2026-11-23); #4 start (`POST …/experiments/<id>/start/`, no body; expected to switch the override on, still at 0%); #5 go live (`PATCH …/experiments/<id>/rollout/`: enabled true, 100%, value `control`, option 36243 at 50). Reason, per Flagsmith's public source: Flagsmith applies the rollout at create and only marks enrollment while running, so the documented create body would show the split before start with no exposures recorded. #4 and #5 are asked separately and run back-to-back on or after 2026-11-26 08:00 IST.
 - **§5.5 live verification** runs after approval #5, not #4. `experiment.inExperiment: true` is expected only after go-live; between start and go-live the rollout is 0% and almost no visitor is enrolled.
 - **§5.4 / Task 7: no SRM check.** Flagsmith will not report a sample-ratio-mismatch check for this experiment, because it computes expected shares from the flag's default split, which is 0% for `benefit_copy`. `/results` must say "not available" rather than imply the split is fine.
+
+## Amendment (2026-11-28) — real results shape (§5.4)
+First real snapshot: 2026-11-27T16:52:18Z, experiment 394 running (commit `504491b`). Its raw bodies are saved as the fixture `apps/web/src/features/results/__fixtures__/real-results.json`. The non-null `inference` shape comes from Flagsmith's frontend types (`frontend/common/types/responses.ts`, main at `9f12873`), because ours is still null.
+- **Results body** (`GET …/experiments/<id>/results/`): `{ "results": { as_of, last_error_at, refresh_requested_at, is_final, payload } }`. `payload` is null until computed, else `{ srm_p_value: number|null, metrics: [...], exposures_timeseries }`.
+- **Per metric:** `{ metric_id, variants: { <variant key>: { n, sum, sum_squares } }, inference: { <variant key>: null | { lift, ci_low, ci_high, chance_to_win } }, conversions_timeseries }`. For an occurrence metric, `n` is identities and `sum` is converted identities. `lift`, `ci_low` and `ci_high` are fractions (0.12 = +12%). `chance_to_win` is 0–1, pairwise against control. Flagsmith's UI shows them as `+12.3%`, `[-2.1%, 8.4%]` and `97%`.
+- **Exposures body** (`GET …/exposures/`): `{ "exposures": { as_of, last_error_at, refresh_requested_at, is_final, payload: null | { excluded_identities, timeseries } } }`.
+- **No verdict field**, so the verdict uses the documented thresholds and is labelled "Verdict per Flagsmith's documented thresholds".
+- **Verdict mapping (owner-approved 2026-11-28):**
+  - "Collecting data" if either arm has fewer than 50 identities or fewer than 5 conversions (a missing arm counts as 0), or if `benefit_copy` has no inference.
+  - Else "Inconclusive" if `ci_low ≤ 0 ≤ ci_high`.
+  - Else "Leading: benefit_copy" if `chance_to_win > 0.95`.
+  - Else "Leading: control" if `1 − chance_to_win > 0.95` (as Flagsmith's UI does for one treatment).
+  - Else "Inconclusive".
+- **SRM:** `srm_p_value` null shows "SRM check not available from Flagsmith". A number shows the p-value, plus a warning below 0.001 (Flagsmith UI's cutoff).
+- **Allowlisted projection (security M3):** the script now stores only the fields above, not the raw bodies. `results` becomes `{ as_of, is_final, payload: null | { srm_p_value, metrics: [{ metric_id, variants: { k: { n, sum } }, inference: { k: null | { lift, ci_low, ci_high, chance_to_win } } }] } }` and `exposures` becomes `{ as_of, excluded_identities }`. Any other shape fails the snapshot and leaves the file untouched. `schemaVersion` stays 1.

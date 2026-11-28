@@ -5,7 +5,7 @@ import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { assertNoServerKey, buildSnapshot, isBody, isEnvKey, scan, selectExperiment, validateExperiment } from './snapshot-lib.mjs'
+import { assertNoServerKey, buildSnapshot, isEnvKey, projectExposures, projectResults, scan, selectExperiment, validateExperiment } from './snapshot-lib.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..', '..')
@@ -114,10 +114,11 @@ export async function run({
       if (failed < 2) await sleep(60000)
     }
     const detail = await json('detail', ['api', url])
-    const exposures = await json('exposures', ['api', `${url}exposures/`])
-    const results = await json('results', ['api', `${url}results/`])
+    const rawExposures = await json('exposures', ['api', `${url}exposures/`])
+    const rawResults = await json('results', ['api', `${url}results/`])
     const experiment = validateExperiment(detail, found)
-    if (!isBody(exposures) || !isBody(results)) throw new Error('unexpected results body')
+    const exposures = projectExposures(rawExposures)
+    const results = projectResults(rawResults)
     const capturedAt = now().toISOString()
     snap = buildSnapshot({ experiment, exposures, results, capturedAt })
     line = `experiment ${experiment.id} ${experiment.status}; results ${results === null ? 'null' : 'present'}; captured ${capturedAt}${failed ? '; refresh failed' : ''}`

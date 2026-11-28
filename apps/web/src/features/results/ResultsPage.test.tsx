@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ResultsPage } from './ResultsPage'
+import committed from './snapshot.json'
 
 const T = '2026-11-23T10:00:00Z'
 const snap = (status: string, results: unknown = null) => ({
@@ -50,12 +51,41 @@ describe('ResultsPage', () => {
     expect(screen.getByText("Flagsmith hasn't computed results yet.")).toBeInTheDocument()
   })
 
-  it('results present before mapping', () => {
-    show(snap('running', { foo: 12345 }))
+  it('unrecognised results keep the placeholder and show no raw values', () => {
+    show(snap('running', { results: { foo: 12345 } }))
     expect(
       screen.getByText('Results captured from Flagsmith — detailed view coming once the format is confirmed.'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/12345/)).toBeNull()
+  })
+
+  it('payload null reads as not computed yet', () => {
+    show(snap('running', { as_of: null, is_final: false, payload: null }))
+    expect(screen.getByText("Flagsmith hasn't computed results yet.")).toBeInTheDocument()
+  })
+
+  it('renders the table and verdict for the committed snapshot', () => {
+    const { container } = show(committed)
+    expect(screen.getByRole('table', { name: 'Demo completed (metric 319)' })).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')).toHaveLength(7)
+    expect(screen.getByRole('rowheader', { name: 'control' })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: 'benefit_copy' })).toBeInTheDocument()
+    const control = screen.getByRole('rowheader', { name: 'control' }).closest('tr')!
+    expect(control).toHaveTextContent('control—————')
+    expect(screen.getByText('Verdict: Collecting data')).toBeInTheDocument()
+    expect(screen.getByText("Verdict per Flagsmith's documented thresholds")).toBeInTheDocument()
+    expect(screen.getByText('SRM check not available from Flagsmith')).toBeInTheDocument()
+    expect(screen.getByText('Results not final yet')).toBeInTheDocument()
+    expect(container.querySelector('.overflow-x-auto table')).not.toBeNull()
+    expect(container.textContent).not.toMatch(/[{}]/)
+  })
+
+  it('warns on a sample ratio mismatch', () => {
+    const r = structuredClone(committed.results) as { payload: { srm_p_value: number | null } }
+    r.payload.srm_p_value = 0.0004
+    show(snap('running', r))
+    expect(screen.getByText('SRM p-value: 0.000')).toBeInTheDocument()
+    expect(screen.getByText('Warning: sample ratio mismatch (SRM p-value below 0.001)')).toBeInTheDocument()
   })
 
   it('invalid snapshot', () => {

@@ -1,8 +1,31 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { loadSnapshot } from '../src/features/results/loadSnapshot.ts'
-import { assertNoServerKey, buildSnapshot, mapExperiment, scan, selectExperiment } from './snapshot-lib.mjs'
+import { assertNoServerKey, buildSnapshot, mapExperiment, projectExposures, projectResults, scan, selectExperiment } from './snapshot-lib.mjs'
 import { run } from './snapshot-results.mjs'
+
+const readJson = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'))
+const fixture = readJson('../src/features/results/__fixtures__/real-results.json')
+const projectedResults = {
+  as_of: '2026-11-27T16:51:16.295297Z',
+  is_final: false,
+  payload: {
+    srm_p_value: null,
+    metrics: [{ metric_id: 319, variants: { benefit_copy: { n: 1, sum: 1 } }, inference: { benefit_copy: null } }],
+  },
+}
+const projectedExposures = { as_of: '2026-11-27T16:51:16.676643Z', excluded_identities: 0 }
+// A results body in the confirmed Flagsmith shape, with `variant` as the variant key.
+const resultsBody = (variant, extra = {}) =>
+  JSON.stringify({
+    results: {
+      as_of: null,
+      is_final: false,
+      payload: { srm_p_value: null, metrics: [{ metric_id: 1, variants: { [variant]: { n: 1, sum: 1 } }, inference: { [variant]: null } }] },
+      ...extra,
+    },
+  })
 
 const exps = [
   { id: 1, feature: 9, status: 'completed' },
@@ -100,6 +123,50 @@ describe('snapshot-lib', () => {
   })
 })
 
+describe('projection', () => {
+  const msg = 'unexpected results body'
+  const full = () => structuredClone(fixture.results)
+  it('projects the real fixture to the allowlisted shape', () => {
+    expect(projectResults(fixture.results)).toEqual(projectedResults)
+    expect(projectExposures(fixture.exposures)).toEqual(projectedExposures)
+    expect(projectResults(null)).toBeNull()
+    expect(projectExposures(null)).toBeNull()
+  })
+  it('keeps a null payload', () => {
+    const b = full()
+    b.results.payload = null
+    expect(projectResults(b)).toEqual({ as_of: projectedResults.as_of, is_final: false, payload: null })
+    const e = structuredClone(fixture.exposures)
+    e.exposures.payload = null
+    expect(projectExposures(e)).toEqual({ as_of: projectedExposures.as_of, excluded_identities: null })
+  })
+  it('keeps exactly the four inference fields', () => {
+    const b = full()
+    b.results.payload.metrics[0].inference.benefit_copy = { lift: 0.1, ci_low: 0.01, ci_high: 0.2, chance_to_win: 0.9, p: 1, extra: 'x' }
+    expect(projectResults(b).payload.metrics[0].inference.benefit_copy).toEqual({ lift: 0.1, ci_low: 0.01, ci_high: 0.2, chance_to_win: 0.9 })
+  })
+  it.each([
+    ['missing results wrapper', (b) => b.results],
+    ['metrics not an array', (b) => ((b.results.payload.metrics = {}), b)],
+    ['string n', (b) => ((b.results.payload.metrics[0].variants.benefit_copy.n = '1'), b)],
+    ['inference missing chance_to_win', (b) => ((b.results.payload.metrics[0].inference.benefit_copy = { lift: 1, ci_low: 0, ci_high: 2 }), b)],
+    ['non-integer metric_id', (b) => ((b.results.payload.metrics[0].metric_id = 1.5), b)],
+    ['string srm_p_value', (b) => ((b.results.payload.srm_p_value = '0.5'), b)],
+    ['missing is_final', (b) => (delete b.results.is_final, b)],
+  ])('rejects %s', (_n, mutate) => {
+    expect(() => projectResults(mutate(full()))).toThrow(msg)
+  })
+  it('rejects a bad exposures body', () => {
+    expect(() => projectExposures({})).toThrow(msg)
+    expect(() => projectExposures({ exposures: { as_of: null, payload: {} } })).toThrow(msg)
+  })
+  it('committed snapshot equals the projection of the fixture', () => {
+    const snap = readJson('../src/features/results/snapshot.json')
+    expect(snap.exposures).toEqual(projectExposures(fixture.exposures))
+    expect(snap.results).toEqual(projectResults(fixture.results))
+  })
+})
+
 describe('run', () => {
   const base = () => ({
     readFile: vi.fn(async () => '{"environment":"ENVKEY1234"}'),
@@ -157,17 +224,17 @@ describe('run', () => {
       const p = args[1]
       if (p.endsWith('/experiments/')) return '{"results":[{"id":3,"feature":{"id":299210},"status":"running"}],"next":null}'
       if (p.endsWith('/3/')) return '{"id":3,"name":"n","status":"running","started_at":"2026-11-21T00:00:00Z","ended_at":null}'
-      if (p.endsWith('/exposures/')) return '{"note":"ENVKEY1234"}'
-      if (p.endsWith('/results/')) return 'null'
+      if (p.endsWith('/exposures/')) return '{"exposures":{"as_of":null,"payload":null}}'
+      if (p.endsWith('/results/')) return resultsBody('ENVKEY1234')
       return ''
     })
     const line = await run(d)
-    expect(line).toBe('experiment 3 running; results null; captured 2026-11-22T00:00:00.000Z')
+    expect(line).toBe('experiment 3 running; results present; captured 2026-11-22T00:00:00.000Z')
     expect(d.sleep).toHaveBeenCalledWith(60000)
     expect(d.exec.mock.calls.filter((c) => c[0][2] === '-X')).toHaveLength(2)
     const written = d.writeFile.mock.calls[0][1]
     expect(written).not.toContain('ENVKEY1234')
-    expect(JSON.parse(written).exposures).toEqual({ note: '[ENV_KEY]' })
+    expect(JSON.parse(written).results.payload.metrics[0].variants).toEqual({ '[ENV_KEY]': { n: 1, sum: 1 } })
     expect(loadSnapshot(JSON.parse(written)).ok).toBe(true)
   })
   const found = (d, postFails) => {
@@ -280,7 +347,7 @@ describe('run', () => {
     await expect(run(d)).rejects.toThrow('unexpected experiment detail')
     expect(d.writeFile).not.toHaveBeenCalled()
   })
-  it.each(['"str"', '5', 'true'])('rejects a scalar results body (%s)', async (body) => {
+  it.each(['"str"', '5', 'true', '{"a":1}', '{"results":5}'])('rejects an invalid results body (%s)', async (body) => {
     const d = base()
     d.exec = vi.fn(async (args) => listed({ results: body })(args))
     await expect(run(d)).rejects.toThrow('unexpected results body')
@@ -292,22 +359,35 @@ describe('run', () => {
     await expect(run(d)).rejects.toThrow('invalid JSON from cli')
     expect(d.writeFile).not.toHaveBeenCalled()
   })
+  // rawKey is JSON-escaped text placed verbatim as the variant key.
+  const keyed = (rawKey) =>
+    `{"results":{"as_of":null,"is_final":false,"payload":{"srm_p_value":null,"metrics":[{"metric_id":1,"variants":{"${rawKey}":{"n":1,"sum":1}},"inference":{"${rawKey}":null}}]}}}`
   it.each([
-    ['{"a":"\\u0073er.abc"}', 'server key detected'],
-    ['{"a":"line\\nser.abc"}', 'server key detected'],
-    ['{"a":"x@y.com"}', 'sensitive value detected'],
-    ['{"a":"eyJhbGciOiJI.eyJzdWIiOiIx"}', 'sensitive value detected'],
-  ])('rejects unsafe decoded values in bodies (%s)', async (body, msg) => {
+    ['\\u0073er.abc', 'server key detected'],
+    ['line\\nser.abc', 'server key detected'],
+    ['x@y.com', 'sensitive value detected'],
+    ['eyJhbGciOiJI.eyJzdWIiOiIx', 'sensitive value detected'],
+  ])('rejects unsafe decoded values in bodies (%s)', async (key, msg) => {
     const d = base()
-    d.exec = vi.fn(async (args) => listed({ results: body })(args))
+    d.exec = vi.fn(async (args) => listed({ results: keyed(key) })(args))
     await expect(run(d)).rejects.toThrow(msg)
     expect(d.writeFile).not.toHaveBeenCalled()
   })
   it('redacts an escaped client key', async () => {
     const d = base()
-    d.exec = vi.fn(async (args) => listed({ results: '{"a":"ENVKEY12\\u0033\\u0034"}' })(args))
+    d.exec = vi.fn(async (args) => listed({ results: keyed('ENVKEY12\\u0033\\u0034') })(args))
     await run(d)
-    expect(JSON.parse(d.writeFile.mock.calls[0][1]).results).toEqual({ a: '[ENV_KEY]' })
+    const { variants, inference } = JSON.parse(d.writeFile.mock.calls[0][1]).results.payload.metrics[0]
+    expect(Object.keys(variants)).toEqual(['[ENV_KEY]'])
+    expect(Object.keys(inference)).toEqual(['[ENV_KEY]'])
+  })
+  it('rejects and writes nothing when the client key reaches the final text', async () => {
+    const d = base()
+    d.now = () => ({ toISOString: () => 'ENVKEY1234' })
+    d.exec = vi.fn(async (args) => listed()(args))
+    await expect(run(d)).rejects.toThrow('client key in snapshot')
+    expect(d.writeFile).not.toHaveBeenCalled()
+    expect(d.rename).not.toHaveBeenCalled()
   })
   it.each([
     ['flag', (a) => a[0] === 'feature'],

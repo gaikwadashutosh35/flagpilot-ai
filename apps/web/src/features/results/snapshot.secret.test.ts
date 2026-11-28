@@ -18,10 +18,11 @@ function strings(v: unknown, out: string[] = []): string[] {
   return out
 }
 
-it('committed snapshot contains no server key and not the client key', () => {
+const files = ['src/features/results/snapshot.json', 'src/features/results/__fixtures__/real-results.json']
+it.each(files)('%s contains no server key and not the client key', (file) => {
   const clientKey = JSON.parse(readFileSync(resolve(process.cwd(), '../../flagsmith.json'), 'utf8')).environment
   expect(typeof clientKey).toBe('string')
-  const text = readFileSync(resolve(process.cwd(), 'src/features/results/snapshot.json'), 'utf8')
+  const text = readFileSync(resolve(process.cwd(), file), 'utf8')
   const all = [text, ...strings(JSON.parse(text))]
   expect(all.some((s) => SERVER_KEY.test(s))).toBe(false)
   expect(all.some((s) => s.includes(clientKey))).toBe(false)

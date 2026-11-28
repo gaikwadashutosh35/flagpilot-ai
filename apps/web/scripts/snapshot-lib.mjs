@@ -59,7 +59,57 @@ export function validateExperiment(detail, found) {
 
 export const isEnvKey = (k) => typeof k === 'string' && /^[A-Za-z0-9_-]{10,64}$/.test(k) && !k.startsWith('ser.')
 
-export const isBody = (b) => b === null || typeof b === 'object'
+const bad = () => new Error('unexpected results body')
+const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v)
+const num = (v) => (Number.isFinite(v) ? v : (() => { throw bad() })())
+const asOf = (v) => (v === null || isDate(v) ? v : (() => { throw bad() })())
+const inner = (body, key) => {
+  if (!isObj(body) || !isObj(body[key])) throw bad()
+  return body[key]
+}
+
+// Allowlisted projection: keeps only the fields the results page reads; everything else is dropped.
+export function projectResults(body) {
+  if (body === null) return null
+  const r = inner(body, 'results')
+  if (typeof r.is_final !== 'boolean') throw bad()
+  const out = { as_of: asOf(r.as_of), is_final: r.is_final, payload: null }
+  if (r.payload === null) return out
+  const p = r.payload
+  if (!isObj(p) || !Array.isArray(p.metrics)) throw bad()
+  if (p.srm_p_value !== null) num(p.srm_p_value)
+  out.payload = {
+    srm_p_value: p.srm_p_value,
+    metrics: p.metrics.map((m) => {
+      if (!isObj(m) || !Number.isInteger(m.metric_id) || !isObj(m.variants) || !isObj(m.inference)) throw bad()
+      return {
+        metric_id: m.metric_id,
+        variants: Object.fromEntries(
+          Object.entries(m.variants).map(([k, v]) => {
+            if (!isObj(v)) throw bad()
+            return [k, { n: num(v.n), sum: num(v.sum) }]
+          }),
+        ),
+        inference: Object.fromEntries(
+          Object.entries(m.inference).map(([k, v]) => {
+            if (v === null) return [k, null]
+            if (!isObj(v)) throw bad()
+            return [k, { lift: num(v.lift), ci_low: num(v.ci_low), ci_high: num(v.ci_high), chance_to_win: num(v.chance_to_win) }]
+          }),
+        ),
+      }
+    }),
+  }
+  return out
+}
+
+export function projectExposures(body) {
+  if (body === null) return null
+  const e = inner(body, 'exposures')
+  if (e.payload === null) return { as_of: asOf(e.as_of), excluded_identities: null }
+  if (!isObj(e.payload)) throw bad()
+  return { as_of: asOf(e.as_of), excluded_identities: num(e.payload.excluded_identities) }
+}
 
 export const buildSnapshot = ({ experiment, exposures, results, capturedAt }) => ({
   schemaVersion: 1,
