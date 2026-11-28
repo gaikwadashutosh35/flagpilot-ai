@@ -71,11 +71,12 @@ describe('ResultsPage', () => {
     expect(screen.getAllByRole('columnheader')).toHaveLength(7)
     expect(screen.getByRole('rowheader', { name: 'control' })).toBeInTheDocument()
     expect(screen.getByRole('rowheader', { name: 'benefit_copy' })).toBeInTheDocument()
-    const control = screen.getByRole('rowheader', { name: 'control' }).closest('tr')!
-    const cells = within(control).getAllByRole('cell')
-    expect(cells).toHaveLength(6)
-    cells.forEach((c) => expect(c.textContent).toBe('—'))
-    expect(screen.getByText('Verdict: Collecting data')).toBeInTheDocument()
+    // The committed snapshot changes with every refresh: assert structure, not its numbers.
+    for (const name of ['control', 'benefit_copy']) {
+      const row = screen.getByRole('rowheader', { name }).closest('tr')!
+      expect(within(row).getAllByRole('cell')).toHaveLength(6)
+    }
+    expect(screen.getByText(/^Verdict: (Collecting data|Inconclusive|Leading: (control|benefit_copy))$/)).toBeInTheDocument()
     expect(screen.getByText("Verdict per Flagsmith's documented thresholds")).toBeInTheDocument()
     expect(screen.getByText('SRM check not available from Flagsmith')).toBeInTheDocument()
     expect(screen.getByText('Results not final yet')).toBeInTheDocument()
@@ -84,6 +85,22 @@ describe('ResultsPage', () => {
     expect(region).toHaveAttribute('tabindex', '0')
     expect(region.querySelector('table')).not.toBeNull()
     expect(container.textContent).not.toMatch(/[{}]/)
+  })
+
+  it('first real snapshot (fc0b215): control missing shows six dashes and Collecting data', () => {
+    // Projected results of the first real snapshot, 2026-11-27T16:52:18Z.
+    const first = {
+      as_of: '2026-11-27T16:51:16.295297Z',
+      is_final: false,
+      payload: {
+        srm_p_value: null,
+        metrics: [{ metric_id: 319, variants: { benefit_copy: { n: 1, sum: 1 } }, inference: { benefit_copy: null } }],
+      },
+    }
+    show(snap('running', first))
+    const cells = within(screen.getByRole('rowheader', { name: 'control' }).closest('tr')!).getAllByRole('cell')
+    expect(cells.map((c) => c.textContent)).toEqual(['—', '—', '—', '—', '—', '—'])
+    expect(screen.getByText('Verdict: Collecting data')).toBeInTheDocument()
   })
 
   it('warns on a sample ratio mismatch', () => {

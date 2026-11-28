@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-27T16:52:18.287Z",
+  "capturedAt": "2026-11-28T09:36:36.507Z",
   "experiment": {
     "id": 394,
     "name": "Onboarding CTA copy",
@@ -9,11 +9,11 @@
     "endedAt": null
   },
   "exposures": {
-    "as_of": "2026-11-27T16:51:16.676643Z",
+    "as_of": "2026-11-28T09:35:33.331526Z",
     "excluded_identities": 0
   },
   "results": {
-    "as_of": "2026-11-27T16:51:16.295297Z",
+    "as_of": "2026-11-28T09:35:32.983779Z",
     "is_final": false,
     "payload": {
       "srm_p_value": null,
@@ -21,13 +21,22 @@
         {
           "metric_id": 319,
           "variants": {
+            "control": {
+              "n": 56,
+              "sum": 11
+            },
             "benefit_copy": {
-              "n": 1,
-              "sum": 1
+              "n": 86,
+              "sum": 27
             }
           },
           "inference": {
-            "benefit_copy": null
+            "benefit_copy": {
+              "lift": 0.5983086680761099,
+              "ci_low": -0.3927520034513927,
+              "ci_high": 1.5893693396036126,
+              "chance_to_win": 0.8816431401487712
+            }
           }
         }
       ]
